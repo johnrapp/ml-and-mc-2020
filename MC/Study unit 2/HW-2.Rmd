@@ -1,0 +1,737 @@
+---
+title: "STAT 202C - HW 2"
+author: "John Rapp Farnes / 405461225"
+date: "4/14/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, fig.height = 4)
+```
+
+```{r, include = F}
+library(tidyverse)
+library(magrittr)
+library(lubridate)
+library(stringr)
+library(tibble)
+library(broom)
+library(ggplot2)
+library(gt)
+library(knitr)
+library(devtools)
+library(DiagrammeR)
+library(parallel)
+library(foreach)
+library(tictoc)
+suppressMessages(library(EpiModel))
+library(incidence)
+library(earlyR)
+library(future)
+library(gridExtra)
+library(magrittr)
+# tic("Time to complete")
+```
+
+```{r, include = F}
+source_files <- c("_icm.mod.init.seiqhrf.R", "_icm.mod.status.seiqhrf.R",
+                  "_icm.mod.vital.seiqhrf.R", "_icm.control.seiqhrf.R", "_icm.utils.seiqhrf.R",
+                  "_icm.saveout.seiqhrf.R", "_icm.icm.seiqhrf.R")
+src_path <- "./"
+gist_url <- "https://gist.github.com/timchurches/92073d0ea75cfbd387f91f7c6e624bd7"
+local_source <- TRUE
+for (source_file in source_files) {
+  if (local_source) {
+    source(paste(src_path, source_file, sep = ""))
+  } else {
+    source_gist(gist_url, filename = source_file)
+  }
+}
+```
+
+```{r, include = F}
+# function to set-up and run the baseline simulations
+simulate <- function(# control.icm params
+  type = "SEIQHRF",
+  nsteps = 366,
+  nsims = 8,
+  ncores = 4,
+  prog.rand = FALSE,
+  rec.rand = FALSE,
+  fat.rand = TRUE,
+  quar.rand = FALSE,
+  hosp.rand = FALSE,
+  disch.rand = TRUE,
+  infection.FUN = infection.seiqhrf.icm,
+  recovery.FUN = progress.seiqhrf.icm,
+  departures.FUN = departures.seiqhrf.icm,
+  arrivals.FUN = arrivals.icm,
+  get_prev.FUN = get_prev.seiqhrf.icm,
+  # init.icm params
+  s.num = 9997,
+  e.num=0,
+  i.num = 3,
+  q.num=0,
+  h.num=0,
+  r.num = 0,
+  f.num = 0,
+  # param.icm params
+  inf.prob.e = 0.02,
+  act.rate.e = 10,
+  inf.prob.i = 0.05,
+  act.rate.i = 10,
+  inf.prob.q = 0.02,
+  act.rate.q = 2.5,
+  quar.rate = 1/30,
+  hosp.rate = 1/100,
+  disch.rate = 1/15,
+  prog.rate = 1/10,
+  prog.dist.scale = 5,
+  prog.dist.shape = 1.5,
+  rec.rate = 1/20,
+  rec.dist.scale = 35,
+  rec.dist.shape = 1.5,
+  fat.rate.base = 1/50,
+  hosp.cap = 40,
+  fat.rate.overcap = 1/25,
+  fat.tcoeff = 0.5,
+  vital = TRUE,
+  a.rate = (10.5/365)/1000,
+  a.prop.e = 0.01,
+  a.prop.i = 0.001,
+  a.prop.q = 0.01,
+  ds.rate = (7/365)/1000,
+  de.rate = (7/365)/1000,
+  di.rate = (7/365)/1000,
+  dq.rate = (7/365)/1000,
+  dh.rate = (20/365)/1000,
+  dr.rate = (7/365)/1000,
+  out="mean"
+) {
+  control <- control.icm(type = type,
+                         nsteps = nsteps,
+                         nsims = nsims,
+                         ncores = ncores,
+                         prog.rand = prog.rand,
+                         rec.rand = rec.rand,
+                         infection.FUN = infection.FUN,
+                         recovery.FUN = recovery.FUN,
+                         arrivals.FUN = arrivals.FUN,
+                         departures.FUN = departures.FUN,
+                         get_prev.FUN = get_prev.FUN)
+  init <- init.icm(s.num = s.num,
+                   e.num = e.num,
+                   i.num = i.num,
+                   q.num = q.num,
+                   h.num = h.num,
+                   r.num = r.num,
+                   f.num = f.num)
+  param <- param.icm(inf.prob.e = inf.prob.e,
+                     act.rate.e = act.rate.e,
+                     inf.prob.i = inf.prob.i,
+                     act.rate.i = act.rate.i,
+                     inf.prob.q = inf.prob.q,
+                     act.rate.q = act.rate.q,
+                     quar.rate = quar.rate,
+                     hosp.rate = hosp.rate,
+                     disch.rate = disch.rate,
+                     prog.rate = prog.rate,
+                     prog.dist.scale = prog.dist.scale,
+                     prog.dist.shape = prog.dist.shape,
+                     rec.rate = rec.rate,
+                     rec.dist.scale = rec.dist.scale,
+                     rec.dist.shape = rec.dist.shape,
+                     fat.rate.base = fat.rate.base,
+                     hosp.cap = hosp.cap,
+                     fat.rate.overcap = fat.rate.overcap,
+                     fat.tcoeff = fat.tcoeff,
+                     vital = vital,
+                     a.rate = a.rate,
+                     a.prop.e = a.prop.e,
+                     a.prop.i = a.prop.i,
+                     a.prop.q = a.prop.q,
+                     ds.rate = ds.rate,
+                     de.rate = de.rate,
+                     di.rate = di.rate,
+                     dq.rate = dq.rate,
+                     dh.rate = dh.rate,
+                     dr.rate = dr.rate)
+  sim <- icm.seiqhrf(param, init, control)
+  sim_df <- as.data.frame(sim, out=out)
+  return(list(sim=sim, df=sim_df))
+}
+
+# define a function to extract timings and assemble a data
+# frame
+get_times <- function(simulate_results) {
+  
+  sim <- simulate_results$sim
+  
+  for (s in 1:sim$control$nsims) {
+    if (s == 1) {
+      times <- sim$times[[paste("sim", s, sep = "")]]
+      times <- times %>% mutate(s = s)
+    } else {
+      times <- times %>% bind_rows(sim$times[[paste("sim",
+                                                    s, sep = "")]] %>% mutate(s = s))
+    }
+  }
+  
+  times <- times %>% mutate(infTime = ifelse(infTime < 0, -5,
+                                             infTime), expTime = ifelse(expTime < 0, -5, expTime)) %>%
+    mutate(incubation_period = infTime - expTime, illness_duration = recovTime -
+             expTime, illness_duration_hosp = dischTime - expTime,
+           hosp_los = dischTime - hospTime, quarantine_delay = quarTime -
+             infTime, survival_time = fatTime - infTime) %>%
+    select(s, incubation_period, quarantine_delay, illness_duration,
+           illness_duration_hosp, hosp_los, survival_time) %>%
+    pivot_longer(-s, names_to = "period_type", values_to = "duration") %>%
+    mutate(period_type = factor(period_type, levels = c("incubation_period",
+                                                        "quarantine_delay", "illness_duration", "illness_duration_hosp",
+                                                        "hosp_los", "survival_time"), labels = c("Incubation period",
+                                                                                                 "Delay entering isolation", "Illness duration", "Illness duration (hosp)",
+                                                                                                 "Hospital care required duration", "Survival time of case fatalities"),
+                                ordered = TRUE))
+  return(times)
+}
+```
+
+# Introduction
+As the COVID-crisis has forced me to move back to my home country Sweden, and I am therefore unknowing of the current situation in Los Angeles, I have decided to apply the exercise to where I am currently residing: Stockholm, Sweden.
+
+As mentioned in US media, Sweden has opted for a slightly different approach than our neighbors, as well as most other countries in the world. The approach involves less strict regulations (e.g. restaurants still being open), rather trusting people to socially distance and self-quarantine when having symtoms, as well as risk groups to self-isolate. The government's logic behind this includes the trust in authority being high in Sweden, the low fatality rates of non-risk groups, as well as balancing the damage on health and wellbeing of shutting down the economy with slowing the virus.
+
+## Interventions
+In this paper, I will apply different measures, as well as combinations of measures and timings, that would further decrease the spread and fatality of the virus in Stockholm, and see which effect they could have in the city. These include:
+\begin{enumerate}
+  \item[I1] Closing down restaurants, bars and other social venues
+  \item[I2] Closing down schools (high school and university are already closed but not yet e.g. elementary school)
+  \item[I3] Limiting the amount of people on public transportation, e.g. the Stockholm subway and bus network
+  \item[I4] Recommending the use of face masks
+  \item[I5] Increasing hospital capacity
+  \item[I6] Forcing quaratine on most of the population, regardless of symptoms or risk group association
+\end{enumerate}
+
+As the practical effects of these measures in terms of model parameters are hard to estimate, and no established theory exists to calculate them, I will do my best to estimate them by my own assesment.
+
+Rather than starting from the beginning of the infection, I will look at what effect the interventions could have on the future, starting at the current state in Stockholm.
+
+\newpage
+
+# Analysis
+
+## Base parameters for Stockholm, Sweden
+Comparing to the given parameter defaults from Australia in the lecture notes, I will try to assess how they should be adapted for Stockholm, Sweden.
+
+### Disease dynamics (\*.rand, \*.FUN, etc.)
+Assuming the "dynamics" of the disease are the same in Stockholm, these are left unchanged
+
+### Initial numbers in compartments (\*.num)
+According to the Swedish health agency \cite{numbers}, the amount of confirmed cases per 10,000 inhabitants in Stockholm is 20, the amount of deaths per 10,000 is 3 and the amount of people per 10,000 receiveing IVA care is 3. From these numbers, assumptions must be made to divide them into the SEIQHRF compartments.
+
+First, since testing has not been done at large scale in Stockholm, I will assume the actual cases (per 10,000) are actually 60, putting the added 20 into the E category, and 20 into the R category. I will assume 80% of those infected self-quarantine (consistent with reports), H to be 2, F to be 3, and the rest to be in the S category. Putting it together, we have:
+
+\begin{table}[h]
+\begin{tabular}{|l|l|}
+\hline
+\textbf{\*.num} & \textbf{Current value} \\ \hline
+s              & 9935                   \\ \hline
+e              & 20                     \\ \hline
+i              & 6                      \\ \hline
+q              & 14                     \\ \hline
+h              & 2                      \\ \hline
+r              & 20                     \\ \hline
+f              & 3                      \\ \hline
+\end{tabular}
+\end{table}
+
+### Disease rates and probabilities (\*.rate, \*.prob)
+
+#### act.rate.i, act.rate.e
+Since Sweden has some but not full social distancing measures in place, I will assume it is lower than the example of early stage in Australia, 8.
+
+#### inf.prob.i, inf.prob.e, inf.prob.q
+As handwashing and other hygiene measures are already in place, I will assume the same value, 0.05 for I and 0.02 for E as Australia. However I will assume they decrease with the use of face masks.
+
+#### quar.rate
+Since self-quarantine is prevailant, I will assume 1/4 per day.
+
+#### hosp.cap
+As Sweden has a low amount of hospital spots per capita (2.2 per 1000 whereas Australia has 3.8, \cite{hospitals}), I will assume half of the number applied to Australia, 20.
+
+For the rest of the parameters, I will assume they have the same value, as the conditions in Stockholm are similar to Australia in those ways.
+
+## Demographic rates (a.rate, d\*.rate)
+These rates are different in Sweden because of demographic differences, in order to limit the scope of the assignment, I will however assume that they are the same.
+
+## Intervention parameters
+
+### Interventions
+
+#### I1
+Assuming the average person eats at a restaurant or visits a bar or social venue once a week on average, and come in contact with and close enough to 7 people every time, closing them would decrease act.i and act.e rate by 1.
+
+#### I2
+This is hard to estimate because of social networks of children and parents at schools mixing, I will assume it decreases act.i and act.e by a full 30%.
+
+#### I3
+Many people in Stockholm regurarly use public transportation, however use has declined and more precausions have been taken by both passengers in terms of distancing, and operators in terms of disinfecting. I therefore assumes it decreases the act rates by 10%.
+
+#### I4
+I will assume all infection rates decreases by 10% with the use of face masks.
+
+#### I5
+Additions to hospital capacity has already taken place, however assuming that vital equipment could be produced in greater pace, and temporary beds could be set up, I will assume the amount of hospital beds can increase by 25%.
+
+#### I6
+Forcing a total quarantine, where people are only allowed to buy food and medicine, as well as work vital jobs, would decrease act rates significantly. I will assume a fourth of the current act rates, 2 per day.
+
+### Combinations
+These interventions can be done alone or combined, I will propose three scenarios: no change, medium interventions and strict interventions. Medium interventions would involve I1-4, together with I5, whereas strict interventions would involve I4 and I6, together with I5.
+
+### Timing
+These interventions could either be put into place right now, or the government could decide to wait a while longer to see how the virus spread will pan out, and put them in place later (e.g. in a month) if the spread is too fast. The quarantine could also be held for only e.g. a month, or multiple, e.g. three months. Finally, the hospital capacity increase could take weeks or months, and be gradual or stepwise. The scenarios I have decided to study are:
+
+\begin{enumerate}
+  \item[S1] Waiting 30 days then strict interventions
+  \item[S2] Strict interventions, lasting only for 30 days
+  \item[S3] Strict interventions, lasting for 14 days, followed by medium interventions
+  \item[S4] Same as S3 but with hospital beds not reaching full capacity before 30 days
+\end{enumerate}
+
+## Simulation and results
+
+### Base simulation, do nothing scenario
+
+```{r, include=F}
+# define a standard set of colors to represent compartments
+compcols <- c(s.num = "yellow", e.num = "orange", i.num = "red",
+              q.num = "cyan", h.num = "magenta", r.num = "lightgreen",
+              f.num = "black")
+complabels <- c(s.num = "Susceptible", e.num = "Infected/asymptomatic",
+                i.num = "Infected/infectious", q.num = "Self-isolated", h.num = "Requires hospitalization",
+                r.num = "Recovered", f.num = "Case fatality")
+                  
+plot_scenario <- function(simul, title) {
+  plot_df <- simul$df %>%
+    select(time, s.num, e.num, i.num, q.num, h.num, r.num, f.num) %>%
+    filter(time <= 100 & time > 1) %>%
+    pivot_longer(-c(time), names_to = "compartment", values_to = "count")
+  
+  plot_full <- plot_df %>% ggplot(aes(x = time, y = count, color = compartment)) +
+    geom_line(size = 2, alpha = 0.7) +
+    scale_color_manual(values = compcols, labels = complabels) +
+    theme_dark() +
+    labs(title = title, x = "Days since beginning of epidemic", y = "Prevalence (persons)")
+  
+  plot_inf <- plot_df %>%
+    filter(compartment %in% c("e.num", "i.num", "q.num", "h.num", "f.num")) %>%
+    ggplot(aes(x = time, y = count, color = compartment)) +
+    geom_line(size = 2, alpha = 0.7) +
+    scale_color_manual(values = compcols, labels = complabels) +
+    theme_dark() +
+    labs(title = title, x = "Days since beginning of epidemic", y = "Prevalence (persons)")
+  
+  grid.arrange(plot_full, plot_inf, nrow = 2)
+  
+  return(plot_df)
+}
+
+plot_comparison <- function(simuls, titles) {
+  plots <- map(seq_along(simuls), ~ simuls[[.x]]$df %>%
+    select(time, s.num, e.num, i.num, q.num, h.num, r.num, f.num) %>%
+    mutate(experiment = titles[.x])
+  )
+  
+  plot_df <- bind_rows(plots) %>%
+    filter(time <= 150 & time > 1) %>%
+    pivot_longer(-c(time, experiment), names_to = "compartment", values_to = "count") %>%
+    filter(compartment %in% c("e.num", "i.num", "q.num", "h.num", "f.num"))
+  
+  plot_full <- plot_df %>%
+    ggplot(aes(x = time, y = count, color = compartment)) +
+    geom_line(size = 1.5, alpha = 0.7) + facet_grid(experiment ~ .) +
+    scale_color_manual(values = compcols, labels = complabels) +
+    theme_dark() +
+    labs(title = "Baseline vs Interventions", x = "Days since today", y = "Prevalence (persons)")
+  
+  plot_inf <- plot_df %>%
+    filter(compartment %in% c("h.num", "f.num")) %>%
+    ggplot(aes(x = time, y = count, color = compartment)) + 
+    geom_line(size = 1.5, alpha = 0.7) + 
+    facet_grid(experiment ~ .) +
+    scale_color_manual(values = compcols, labels = complabels) +
+    theme_dark() +
+    labs(title = "Baseline vs Interventions", x = "Days since today", y = "Prevalence (persons)")
+  
+  grid.arrange(plot_full, plot_inf, nrow = 2)
+}
+```
+
+Following is a plot of the baseline, do nothing scenario simulation result:
+
+```{r}
+baseline_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8,
+  act.rate.e = 8,
+  quar.rate = 1/4,
+  hosp.cap = 20
+)
+
+baseline_plot_df <- plot_scenario(baseline_simul, "Baseline simulation")
+```
+
+NOTE: In the provided code, changing all the \*.num parameters resulted in an exception. Therefore I implemented those who worked, and tweaked I to better fit the intended scenario.
+
+As can be seen in the plot, in the baseline scenario the epedemic lasts for ~100 days, with ~200 dead per 10,000, resulting in a total of ~20,000 deaths as the Stockholm population is ~1 million.
+
+### Pure interventions
+
+```{r}
+I1_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8 - 1,
+  act.rate.e = 8 - 1,
+  quar.rate = 1/4,
+  hosp.cap = 20
+)
+
+I2_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8 * .7,
+  act.rate.e = 8 * .7,
+  quar.rate = 1/4,
+  hosp.cap = 20
+)
+
+I3_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8 * .9,
+  act.rate.e = 8 * .9,
+  quar.rate = 1/4,
+  hosp.cap = 20
+)
+
+I4_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8,
+  act.rate.e = 8,
+  inf.prob.i = 0.05 * 0.9,
+  inf.prob.e = 0.02 * 0.9,
+  inf.prob.q = 0.02 * 0.9,
+  quar.rate = 1/4,
+  hosp.cap = 20
+)
+
+I5_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8,
+  act.rate.e = 8,
+  quar.rate = 1/4,
+  hosp.cap = 20 * 1.25
+)
+
+I6_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8 * .25,
+  act.rate.e = 8 * .25,
+  quar.rate = 1,
+  hosp.cap = 20
+)
+
+```
+
+
+```{r, fig.height=9}
+plot_comparison(
+  list(baseline_simul, I1_simul, I2_simul, I3_simul, I4_simul, I5_simul, I6_simul),
+  c("Base", paste("I", 1:6, sep=""))
+)
+```
+
+It is clear that interventions have an impact on the spread and fatality of the virus, where I6 of course being the most effective. I2 significantly "flattens the curve" and decreases deaths, however this also increases the duration that the virus is active, and therefore society disturbed. I5 only has a slight effect on the curve, however this intervention is easily combined with others.
+
+### Combinations
+
+```{r}
+medium_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8 * .7 * .9 - 1,
+  act.rate.e = 8 * .7 * .9 - 1,
+  quar.rate = 1/4,
+  inf.prob.i = 0.05 * 0.9,
+  inf.prob.e = 0.02 * 0.9,
+  inf.prob.q = 0.02 * 0.9,
+  hosp.cap = 20 * 1.25
+)
+
+strict_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = 8 * .25,
+  act.rate.e = 8 * .25,
+  quar.rate = 1,
+  inf.prob.i = 0.05 * 0.9,
+  inf.prob.e = 0.02 * 0.9,
+  inf.prob.q = 0.02 * 0.9,
+  hosp.cap = 20 * 1.25
+)
+```
+
+```{r, fig.height=9}
+plot_comparison(
+  list(baseline_simul, medium_simul, strict_simul),
+  c("No change", "Medium", "Strict")
+)
+```
+
+
+It is clear that medium interventions have a significant impact on the effect of the virus, with only 15 \% of the fatality compared to no change. Immediate strict measures could almost stop the spread and fatality of the virus all together. With these parameters, the difference between medium and strict is not very big, it is likely bigger in reality.
+
+### Timings
+  
+```{r}
+S1_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = c(rep(8, 30), rep(8 * .25, 200-30)),
+  act.rate.e = c(rep(8, 30), rep(8 * .25 - 1, 200-30)),
+  quar.rate = c(rep(1/4, 30), rep(1, 200-30)),
+  inf.prob.i = c(rep(0.05, 30), rep(0.05 * 0.9, 200 - 30)),
+  inf.prob.e = c(rep(0.02, 30), rep(0.02 * 0.9, 200 - 30)),
+  inf.prob.q = c(rep(0.02, 30), rep(0.02 * 0.9, 200 - 30)),
+  hosp.cap = 20 * 1.25
+)
+
+S2_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = c(rep(8 * .25, 30), rep(8, 200-30)),
+  act.rate.e = c(rep(8 * .25, 30), rep(8, 200-30)),
+  quar.rate = c(rep(1, 14), rep(1/4, 200-14)),
+  inf.prob.i = c(rep(0.05 * 0.9, 30), rep(0.05, 200 - 30)),
+  inf.prob.e = c(rep(0.02 * 0.9, 30), rep(0.02, 200 - 30)),
+  inf.prob.q = c(rep(0.02 * 0.9, 30), rep(0.02, 200 - 30)),
+  hosp.cap = 20 * 1.25
+)
+
+S3_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = c(rep(8 * .25, 14), rep(8 * .7 * .9 - 1, 200-14)),
+  act.rate.e = c(rep(8 * .25, 14), rep(8 * .7 * .9 - 1, 200-14)),
+  quar.rate = c(rep(1, 14), rep(1/4, 200-14)),
+  inf.prob.i = 0.05 * 0.9,
+  inf.prob.e = 0.02 * 0.9,
+  inf.prob.q = 0.02 * 0.9,
+  hosp.cap = 20 * 1.25
+)
+
+
+S4_simul <- simulate(
+  ncores = 1,
+  nsteps = 200,
+  # s.num = 9935,
+  # e.num = 20,
+  # i.num = 6,
+  i.num = 26,
+  q.num = 14,
+  # h.num = 2,
+  r.num = 20,
+  f.num = 3,
+  act.rate.i = c(rep(8 * .25, 14), rep(8 * .7 * .9 - 1, 200-14)),
+  act.rate.e = c(rep(8 * .25, 14), rep(8 * .7 * .9 - 1, 200-14)),
+  quar.rate = c(rep(1,  14), rep(1/4, 200-14)),
+  inf.prob.i = 0.05 * 0.9,
+  inf.prob.e = 0.02 * 0.9,
+  inf.prob.q = 0.02 * 0.9,
+  # hosp.cap = 20 + unlist(map(1:200, ~ round(. / 200 * 5)))
+  hosp.cap = (20 + 20 * 1.25) / 2
+)
+```
+
+```{r, fig.height=9}
+plot_comparison(
+  list(baseline_simul, S1_simul, S2_simul, S3_simul, S4_simul, medium_simul),
+  c("Base", paste("S", 1:4, sep=""), "Medium")
+)
+```
+
+NOTE: In the provided code, increasing the amount of hospital capacity after the simulation start was not supported. Instead the capacity was only inceased by half of 25% in S4.
+
+The simulations of S1 show that waiting 30 days to further study the effect of the virus before taking measures could still cut the fatality rate by two thirds and end the crisis early. S2 however shows that breaking quarantine "early", i.e. after 30 days could defeats its purpose and lead to the same amount of deaths, as well as prolong the crisis. S3 and S4 show that a shorter, 14 day quarantine, followed by medium measures could prove very effective, while balancing economic factors. Comparing it to the medium measures however, the difference is not very big.
+
+# Conclusion
+The experiments show that interventions could significantly reduce the effect of the virus in terms of deaths in Stockholm, Sweden. According to the simulations, "medium" measures could cut the number of fatalities by 85 \%, while immediate and long lasting strict measures could almost eradicate it all together at this stage, however if ended "early" almost has no effect. The scenario analys show that an effective, and less invasive intervention could be strict measures for a short (i.e. 14 days) period of time followed by medium measures.
+
+When applying the results of these models to the real world, and making real-life major nationwide decisions based on them, careful consideration must be taken as they are only models. Further, even though the SEIQHRF model incorporate many real world aspects of epidemic spread, the results depend heavily on what parameters are input into it. Unfortunately, these are very had to measure and collect precise data about in the real world, and doing so takes time, which means that we do not have accurate estimate on their values. Further, estimating the effect of interventions is very hard, and doing it by "gut feeling" as I have done in this paper has a very big confidence interval and may lead to misleading results.
+
+In the end, the effects of the measures taken to battle the epidemic must also be balanced with the effects of the measures themselfes on society. As these effects are very hard to estimate, and this balancing act is ethically and politically difficult, the answer as to what Sweden should do is impossible to know. In fact, an epidemic of this kind has never  happened before, and which measures turns out to be right in the end is something only time can tell.
+
+
+\begin{thebibliography}{9}
+\bibitem{numbers} 
+Confirmed cases in Sweden, Swedish Health Agency,
+\\\texttt{https://www.folkhalsomyndigheten.se/smittskydd-beredskap/utbrott/aktuella-utbrott/covid-19/bekraftade-fall-i-sverige/}
+\bibitem{hospitals} 
+Hospital beds, OECD,
+\\\texttt{https://data.oecd.org/healtheqt/hospital-beds.htm}
+\end{thebibliography}
+
+
+
+```{r, fig.height=9, include = F}
+# times <- get_times(baseline_simul)
+# times %>% filter(duration <= 30) %>% ggplot(aes(x = duration)) +
+#   geom_bar() + facet_grid(period_type ~ ., scales = "free_y") +
+#   labs(title = "Duration frequency distributions", subtitle = "Baseline simulation") +
+#   xlab("Duration (in days)")
+```
+
+```{r, include = F}
+# # get the S-> E compartment flow, which is our daily
+# # incidence rate
+# incidence_counts <- simul$df %>% select(time, se.flow)
+# # uncount them
+# incident_case_dates <- incidence_counts %>% uncount(se.flow) %>%
+#   pull(time)
+# # convert to an incidence object
+# incidence_all <- incident_case_dates %>% incidence(.)
+# # plot the incidence curve
+# plot(incidence_all)
+# 
+# 
+# # find the peak of the epidemic curve
+# peak_of_epidemic_curve <- find_peak(incidence_all)
+# # repeat with just the growth part of the epidemic curve
+# incident_case_dates_growth_phase <- incidence_counts %>% filter(time <=
+#                                                                   peak_of_epidemic_curve) %>% select(time, se.flow) %>% uncount(se.flow) %>%
+#   pull(time)
+# incidence_growth_phase <- incident_case_dates_growth_phase %>%
+#   incidence(., last_date = peak_of_epidemic_curve)
+# # specify serial interval mean and SD since Tim Churches's
+# # original work, new studies have appeared suggesting 4.5 is
+# # a better mean for the SI than the 7.5 he originally used.
+# si_mean <- 4.5
+# si_sd <- 3.4
+# 
+# # get a set of MLE estimates for R0 and plot
+# res <- get_R(incidence_growth_phase, si_mean = si_mean, si_sd = si_sd)
+# plot(res, "R")
+```
+
+```{r, include = F}
+# plot_df %>% mutate(experiment = "Baseline") %>% bind_rows(plot_df %>% mutate(experiment = "Ramp up isolation")) %>% filter(compartment %in%
+#                                                                                                                             c("e.num", "i.num", "q.num", "h.num", "f.num")) %>% ggplot(aes(x = time,
+#                                                                                                                                                                                            y = count, color = compartment)) + geom_line(size = 2, alpha = 0.7) +
+#   facet_grid(experiment ~ .) + scale_color_manual(values = compcols,
+#                                                   labels = complabels) + theme_dark() + labs(title = "Baseline vs ramping up isolation simulations",
+#                                                                                              x = "Days since beginning of epidemic", y = "Prevalence (persons)")
+```
+
+

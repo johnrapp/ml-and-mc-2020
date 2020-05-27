@@ -1,0 +1,207 @@
+---
+title: "STAT 202C - HW 1"
+author: "John Rapp Farnes / 405461225"
+date: "4/1/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, fig.height = 4)
+```
+
+# 1) Deterministic Compartmental Models for Epidemics in continuous time
+From the SIR-model assumptions, we obtain 
+
+$$
+\begin{cases}
+  \frac{dS}{dt}=-\frac{\beta I}{N}S \\
+  \frac{dI}{dt}=\frac{\beta I}{N}S - \gamma I \\
+  \frac{dR}{dt}=\gamma I \\
+  S + I + R = N \\
+\end{cases}
+$$
+
+With initial and boundary conditions:
+
+$$
+\begin{cases}
+  S(0)=N \\
+  I(0)=0 \\
+  R(0)=0 \\
+  I(\infty)=0
+\end{cases}
+\implies
+S(\infty)+R(\infty)=N
+$$
+
+We are looking for $f=\frac{R(\infty)}{N}$ as a function of $R_0=\frac{\beta}{\gamma}$.
+
+By dividing $\frac{dI}{dt}$ by $\frac{dS}{dt}$ (assuming $\frac{dS}{dt} \ne 0$ as this implies $S=0$), we obtain:
+
+
+$$
+\begin{aligned}
+  \frac{dI}{dS}&=-1+\frac{\gamma N}{\beta S} &\overset{\text{integration}}{\implies} \\
+  I(t)&=-S(t)+\frac{\gamma N}{\beta} \ln{S(t)}+C &\overset{I = N - S - R}{\implies} \\ 
+  N-R(t)&=\frac{\gamma N}{\beta} \ln{S(t)} + C &\overset{(*)}{\implies} \\
+  -R(t)&=\frac{\gamma N}{\beta} \ln{S(t)}-\frac{\gamma N}{\beta} \ln{N} &\implies \\
+  -\frac{\beta}{\gamma N}R(t)&= \ln{\frac{S(t)}{N}} &\overset{R_0=\frac{\beta}{\gamma}}{\implies} \\
+  S(t)&=Ne^{-\frac{R_0}{N}R(t)} &\overset{R(\infty)=N-S(\infty)}{\implies} \\
+  R(\infty)&=N-Ne^{-R_0\frac{R(\infty)}{N}} &\implies \\
+  \frac{R(\infty)}{N} & =1-e^{-R_0\frac{R(\infty)}{N}}
+\end{aligned}
+$$
+Where (*) is given by letting $t=0$ to determine the integration constant $C$
+$$
+N-\underbrace{R(0)}_{=0}=\frac{\gamma N}{\beta} \ln{\underbrace{S(0)}_{=N}} + C \implies \\
+C=N-\frac{\gamma N}{\beta} \ln{N}
+$$
+As such, we have that $f$ solves the equation
+$$
+f+e^{-R_0 f}-1=0
+$$
+This is an implicit expression for $f$ that could be visualized plotted e.g. by numerically solving for a range of $R_0$ values. An analytical expression can also be found by plugging it into Wolfram alpha which yields the solution
+
+$$
+f=\frac{W(-e^{-R_0}R_0)+R_0}{R_0}
+$$
+
+Where $W(z)$ is the Lambert $W$-Function or product log function.
+
+This function can be plotted in R as such:
+
+```{r, message=FALSE, fig.height=4}
+require(VGAM)
+f <- function(R_0) {
+  return((lambertW(-exp(-R_0)*R_0)+R_0)/(R_0))
+}
+R_0 <- seq(from = 0.1, to = 10, by = 0.05)
+
+plot(R_0, f(R_0), type = "l", main = "Plot of f(R_0)")
+```
+
+As expected, $f$ is 0 for $R_0 < 1$, as the epedemic will not gain a foothold in that case, and approaches 1 as $R \to \infty$, the epedemic spreading faster and wider in that case.
+
+# 2) Deterministic Compartmental Models for Epidemics in discrete time
+## a)
+```{r, fig.height=4}
+require(EpiModel)
+
+param <- param.dcm(inf.prob = 0.3, act.rate = 0.6, rec.rate = 0.1)
+init <- init.dcm(s.num = 999, i.num = 1, r.num = 0)
+control <- control.dcm(type = "SIR", nsteps = 250)
+
+mod <- dcm(param, init, control)
+
+plot(mod,
+ popfrac=TRUE,
+ xlab="Time since start (in days)",
+ ylab="Fraction of the population",
+ main="The sizes of the susceptible, infected and recovered sub-groups")
+```
+```{r}
+(R_0 = (param$inf.prob * param$act.rate) / param$rec.rate)
+
+(f = mod$epi$r.num$run1[length(mod$epi$r.num$run1)] / (init$s.num + init$i.num))
+```
+
+For this desease, $R_0=1.8$, and the final epidemic size is 73% of the population, hence it does "take off".
+
+## b)
+```{r, fig.height=4}
+param <- param.dcm(inf.prob = 0.2, act.rate = 1.4, rec.rate = 0.1)
+init <- init.dcm(s.num = 1000, i.num = 1, r.num = 0)
+control <- control.dcm(type = "SIR", nsteps = 250)
+
+mod <- dcm(param, init, control)
+
+plot(mod,
+ popfrac=TRUE,
+ xlab="Time since start (in days)",
+ ylab="Fraction of the population",
+ main="The sizes of the susceptible, infected and recovered sub-groups")
+```
+```{r}
+(R_0 <- (param$inf.prob * param$act.rate) / param$rec.rate)
+
+(f <- mod$epi$r.num$run1[length(mod$epi$r.num$run1)] / (init$s.num + init$i.num))
+```
+
+For this desease, $R_0=2.8$, and the final epidemic size is 93% of the population, hence it does "take off" and is spreading faster and wider than the epidemic in b).
+
+## c) $R_0 = 1$
+We have $R_0=\frac{\alpha \tau}{\gamma} \implies \alpha=R_0\frac{\gamma}{\tau}$
+```{r, fig.height=4}
+(alpha <- 1 * param$rec.rate /param$inf.prob)
+
+plot(dcm(
+  param.dcm(inf.prob = param$inf.prob, act.rate = alpha, rec.rate = param$rec.rate), 
+  init.dcm(s.num = 1000, i.num = 1, r.num = 0),
+  control.dcm(type = "SIR", nsteps = 250)
+))
+```
+
+As can be seen in the figure above, the disease never "takes off" in this case.
+
+\newpage
+
+## d) Peak disease incidence
+```{r, fig.height=4}
+library(pracma)
+plot(mod,
+  y = "si.flow",
+  col = "red",
+  main = "Disease Incidence",
+  xlab = "Time since start (in days)",
+  ylab = "Numbers of new cases per day"
+)
+
+peaks <- findpeaks(mod$epi$si.flow$run1, nups=1)
+(peak_timestep <- peaks[1, 2])
+```
+
+## e) Peak disease prevalence
+
+```{r, fig.height=4}
+plot(mod,
+  y = "i.num",
+  col = "green",
+  main = "Disease prevalence",
+  xlab = "Time since start (in days)",
+  ylab = "Numbers of cases"
+)
+
+peaks <- findpeaks(mod$epi$i.num$run1, nups=1)
+(peak_timestep <- peaks[1, 2])
+```
+
+## f)
+The peak prevalence is later than the peak time of disease incidence, since the peak incidence is where the velocity of new cases is the highest. The peak number of cases is after this, since the "momentum" of the peak velocity is continuing to drive the new cases after its peak. This is much like a swing having its peak velocity at the bottom of its path, while its acceleration is highest before that, at the top.
+
+## g)
+In addition to the plots above, we can e.g. plot the outcome of the disease given different measures of social distancing, decreasing the act rate $\alpha$, in order to study the effectiveness of such measures on the disease. In order to simulate the conditions of a currently active outbreak, like the current COVID-19, 5% of the population will be affected already in the simulation.
+```{r}
+inf.prob = rep(0.2, 3)
+act.rate = c(1.4, 1, 0.5)
+rec.rate = rep(0.1, 3)
+
+param <- param.dcm(inf.prob = inf.prob, act.rate = act.rate, rec.rate = rec.rate)
+init <- init.dcm(s.num = 950, i.num = 50, r.num = 0)
+control <- control.dcm(type = "SIR", nsteps = 250)
+
+mod <- dcm(param, init, control)
+
+plot(mod,
+  y="i.num",
+  popfrac=TRUE,
+  xlab="Time since start (in days)",
+  ylab="Fraction of the population",
+  main="Outcome of the disease given various social distancing measures")
+
+legend("topright",
+  legend = c("No measures", "Some measures", "Strict measures"),
+  fill=c("red", "blue", "green")
+)
+
+```
+As can be seen, taking some measures may "flatten the curve" in an epidemic, while stopping the disease all together takes more "strict measures".

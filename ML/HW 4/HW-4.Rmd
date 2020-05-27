@@ -1,0 +1,38 @@
+---
+title: "HW 4"
+author: "John Rapp Farnes"
+date: "28 april 2020"
+output: html_document
+---
+# 3.
+
+As $Tr$ is linear and $Tr(A)=Tr(A^T)$, we can rewrite $J$ as
+
+$$
+\begin{aligned}
+J(\tilde{W}) &= \frac{1}{2}Tr((\tilde{X}\tilde{W} − T)^T(\tilde{X}\tilde{W} − T)) \\
+&= \frac{1}{2} Tr((\tilde{W}^T\tilde{X}^T-T^T)(\tilde{X}\tilde{W} − T)) \\
+&= \frac{1}{2} Tr(\tilde{W}^T\tilde{X}^T\tilde{X}\tilde{W} - \tilde{W}^T\tilde{X}^TT- T^T \tilde{X}\tilde{W} + T^TT) \\
+&= \frac{1}{2}\big[ Tr(\tilde{W}^T\tilde{X}^T\tilde{X}\tilde{W}) - \underbrace{Tr(\tilde{W}^T\tilde{X}^TT)}_{=Tr(T^T\tilde{X}\tilde{W})}- Tr(T^T \tilde{X}\tilde{W}) + Tr(T^TT)\big]
+\end{aligned}
+$$
+
+Using the gradient rules for $Tr$, we can write the gradient $\nabla J(\tilde{W})$ as such:
+
+
+$$
+\begin{aligned}
+\nabla J(\tilde{W}) &= \frac{1}{2}\big[ \nabla_wTr(\tilde{W}^T\tilde{X}^T\tilde{X}\tilde{W}) -  2\nabla_wTr(T^T\tilde{X}\tilde{W}) + \underbrace{\nabla_wTr(T^TT)}_{=0}\big] \\
+&=\frac{1}{2}\big[(\tilde{X}^T\tilde{X} + \tilde{X}^T\tilde{X})\tilde{W} - 2\tilde{X}^TT\big] \\
+&=\tilde{X}^T\tilde{X}\tilde{W} - \tilde{X}^TT
+\end{aligned}
+$$
+
+We optimize $J$ by solving $\nabla J = 0$:
+$$
+\begin{aligned}
+\nabla J(&\tilde{W}) = 0 &&\Leftrightarrow \\
+\tilde{X}^T\tilde{X}&\tilde{W} = \tilde{X}^TT &&\Leftrightarrow \\
+&\tilde{W} = (\tilde{X}^T\tilde{X})^{-1}\tilde{X}^TT
+\end{aligned}
+$$
