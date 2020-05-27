@@ -1,0 +1,171 @@
+---
+title: "HW3"
+author: "John Rapp Farnes"
+date: "4/22/2020"
+output: html_document
+---
+
+# HW 3
+
+## 1.
+$$
+J=-\sum_{n=1}^{N}[y_n\log h_w(x_n)+(1-y_n)\log (1-h_w(x_n))]+\frac{1}{2}\underbrace{\sum_i w_i ^2}_{=w^Tw}
+$$
+
+We have 
+$$
+\frac{dh_w(x)}{dw}=\sigma' (w^Tx)x=\sigma(w^Tx)(1-\sigma (w^Tx))x
+$$
+and
+$$
+\frac{dw^Tw}{dw}=2w
+$$
+
+
+Therefore 
+
+$$
+\begin{aligned}
+\frac{dJ}{dw}&=-\sum_{n=1}^{N}[y_n \frac{1}{\sigma(w^Tx_n)}  \sigma(w^Tx_n)(1-\sigma (w^Tx_n))x_n-(1-y_n) \frac{1}{1-\sigma (w^Tx_n)}  \sigma(w^Tx_n)(1-\sigma (w^Tx_n))x_n]+w\\
+&=-\sum_{n=1}^{N}[y_n (1-h_w (x_n))x_n-(1-y_n) h_w(x_n)x_n]+w\\
+&=-\sum_{n=1}^{N}[y_n x_n -h_w (x_n)y_n x_n- h_w(x_n)x_n + h_w(x_n) y_n x_n]+w\\
+&=-\sum_{n=1}^{N}[(y_n -h_w(x_n))x_n]+w\\
+\end{aligned}
+$$
+
+As such, for gradient descent, we have the update rule
+
+$$
+w_{k+1}=w_k-\eta \frac{dJ}{dw} = w_k+\eta \Big[\sum_{n=1}^{N}[(y_n -h_w(x_n))x_n]-w\Big]\\
+$$
+
+## 2.
+We are optimizing
+
+$$
+w^*=\underset{w}{\arg \max} \prod_{i=1}^nP(y_i \vert x_i, w)f(w)=\underset{w}{\arg \min} (-\prod_{i=1}^nP(y_i \vert x_i, w)f(w))
+$$
+
+As $\log x$ is a monotone incrasing function, this is equivalent to
+
+$$
+\begin{aligned}
+w^*&=\underset{w}{\arg \min} (-\log \Big[\prod_{i=1}^nP(y_i \vert x_i, w)f(w)\Big]) \\
+&=\underset{w}{\arg \min} (-\sum_{i=1}^n\log [P(y_i \vert x_i, w)f(w)]) \\
+&=\underset{w}{\arg \min} (-\sum_{i=1}^n\log P(y_i \vert x_i, w) -\sum_{i=1}^n\log f(w)) \\
+&=\underset{w}{\arg \min} \: J(w)
+\end{aligned}
+$$
+
+We have
+$$
+\log P(y_i \vert x_i, w) = y_i \log h_w(x_i)+(1-y_i) \log (1-h_w(x_i))
+$$
+
+and
+$$
+\log f(x) = \log\frac{1}{(2\pi)^{\frac{m}{2}}} \exp \Big(-\sum_{i=1}^m \frac{w_i^2}{2}\Big) = -\frac{m}{2}\log(2\pi) -\sum_{i=1}^m \frac{w_i^2}{2}
+$$
+
+As such, we have
+
+$$
+\begin{aligned}
+J &= -\sum_{n=1}^{N}[y_n \log h_w(x_n)+(1-y_n) \log (1-h_w(x_n))]-\sum_{n=1}^{N}[-\frac{m}{2}\log(2\pi) -\sum_{i=1}^m \frac{w_i^2}{2}] \\
+&= -\sum_{n=1}^{N}[y_n \log h_w(x_n)+(1-y_n) \log (1-h_w(x_n))] +N\frac{1}{2}\sum_{i=1}^m w_i^2+N\frac{m}{2}\log(2\pi)
+\end{aligned}
+$$
+
+Comparing to the loss function in 1., we can see that this function only differs by the norm being multiplied by a constant $N$, and with an added constant $N\frac{m}{2}\log(2\pi)$. These functions will have the same gradient (except for the scaling of the $N$ factor), as the constant will be equal to 0 in the derivatives and gradient. They are therefore equivalent.
+
+## 3.
+
+### (a)
+Entropy is defined as $H(X)=-\sum_{k=1}^{K}p_k \log p_k$. For $X=\textit{IsGoodRestaurant}$ we have $P(X=1)=\frac{6}{8}$, and therefore $P(X=0)=1-P(X=1)=\frac{2}{8}$. As such:
+
+$$
+H(\textit{IsGoodRestaurant})=-\frac{6}{8}\log \frac{6}{8}-\frac{2}{8}\log \frac{2}{8}
+$$
+
+### (b)
+We have $H(Y\vert X)=\sum_j H(Y\vert X=x_j)P(X=x_j)$, where 
+$$
+\begin{aligned}
+H(Y\vert X=x_j)&=-\sum_{k=1}^{K}P(Y=y_k\vert X=x_j)\log P(Y=y_k\vert X=x_j) \\
+&=-\sum_{k=1}^{K}\frac{P(Y=y_k, X=x_j)}{P(X=x_j)}\log \frac{P(Y=y_k, X=x_j)}{P(X=x_j)}
+\end{aligned}
+$$
+
+As such, we can calculate
+
+$$
+\begin{aligned}
+&H(\textit{IsGoodRestaurant}|\textit{HasOutdoorSeating} = 0) \\
+&=-\frac{P(\textit{IsGoodRestaurant}=1, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)}\log \frac{P(\textit{IsGoodRestaurant}=1, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)} \\
+&-\frac{P(\textit{IsGoodRestaurant}=0, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)}\log \frac{P(\textit{IsGoodRestaurant}=0, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)} \\
+
+&=-\frac{P(\textit{IsGoodRestaurant}=1, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)}\log \frac{P(\textit{IsGoodRestaurant}=1, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)} \\
+&-\frac{P(\textit{IsGoodRestaurant}=0, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)}\log \frac{P(\textit{IsGoodRestaurant}=0, \textit{HasOutdoorSeating}=0)}{P(\textit{HasOutdoorSeating}=0)}
+\end{aligned}
+$$
+
+
+## 4.
+### b)
+The properties of $i(q(V))$ imply that $i(q(V)) \ge 0 \: \forall V$.
+As such:
+$$
+\begin{aligned}
+I(V_1, V_2, V) &= \underbrace{i(q(V))}_{\ge0} − (p(V_1, V)i(q(V_1)) + p(V_2, V)i(q(V_2))) \\
+               &\ge
+\end{aligned}
+$$
+
+
+
+As $V_1 \cup V_2=V$ and $V_1 \cap V_2=\varnothing$, we have
+$$
+p(V_1 \cup V_2,V)=p(V,V) \implies p(V_1,V)+p(V_2,V)-\underbrace{p(V_1 \cap V_2,V)}_{=0}=p(V,V)=1
+$$
+
+by the addition formula for the cardinality of the union of sets. Let $\lambda = p(V_1)$, we then have $P(V_2) = 1-\lambda$. As $0\le p(X,Y) \le 1\:\forall X,Y$ by the definition of cardinality, this also applies to $\lambda$. Finally, we have $q(V) = p(V_1)q(V_1)+p(V_2)q(V_2)$ by the law of total probability.
+
+As such:
+
+$$
+\begin{aligned}
+I(V_1, V_2, V) &= i(q(V)) − (p(V_1, V)i(q(V_1)) + p(V_2, V)i(q(V_2))) \\
+               &= i(\lambda q(V_1)+(1-\lambda) q(V_2)) − (\lambda i(q(V_1)) + (1-\lambda)i(q(V_2))) \\
+\end{aligned}
+$$
+As $i(\lambda q(V_1)+(1-\lambda) q(V_2)) \ge (\lambda i(q(V_1)) + (1-\lambda)i(q(V_2)))$ by concavity, we have $I(V_1, V_2, V) \ge 0$.
+
+### (c)
+$$
+\begin{aligned}
+&H(x)&&=-(x\log x+(1-x)\log (1-x)) \implies \\
+&\frac{dH(x)}{dx}&&=-(\log x+ 1 -\log (1-x)-1) \\
+& &&=\log (1-x) - \log x \implies \\
+&\frac{d^2H(x)}{dx^2}&&=-\frac{1}{1-x}-\frac{1}{x} \\
+& &&=-\frac{x}{x(1-x)}-\frac{1-x}{x(1-x)} \\ \\
+& &&=-\frac{1}{x(1-x)}
+\end{aligned}
+$$
+
+We have $r_1(x)=\frac{1}{x} \ge 0\:\forall x > 0$ and $r_2(x)=\frac{1}{1-x} \ge 0\:\forall x < 1$. As such: $\frac{d^2H(x)}{dx^2}=-r_1(x)r_2(x)\le0 \: \forall x \in (0,1)$
+
+
+
+
+### (d)
+
+We have
+
+$$
+\begin{aligned}
+&g(x)&&=2x(1-x) = 2x-2x^2 \implies \\
+&\frac{dg(x)}{dx}&&=2-4x \implies \\
+&\frac{d^2g(x)}{dx^2}&&=-4 \\
+& && \le0 \: \forall x \in (0,1)
+\end{aligned}
+$$

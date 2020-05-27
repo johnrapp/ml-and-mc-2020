@@ -1,0 +1,238 @@
+  ---
+title: "Untitled"
+author: "John Rapp Farnes"
+date: "4/5/2020"
+output: html_document
+---
+
+# 1.
+
+We have
+
+$$
+\begin{cases}
+P(\text{red} \:\vert\: \text{first urn}) = \frac{4}{10} \\
+P(\text{blue} \:\vert\: \text{first urn}) = \frac{3}{10} \\
+P(\text{white} \:\vert\: \text{first urn}) = \frac{3}{10} \\
+P(\text{red} \:\vert\: \text{second urn}) = \frac{2}{10} \\
+P(\text{blue} \:\vert\: \text{second urn}) = \frac{4}{10} \\
+P(\text{white} \:\vert\: \text{second urn}) = \frac{4}{10} \\
+P(\text{first urn}) = \frac{4}{10}\\
+P(\text{second urn}) = 1 - P(\text{first urn}) = \frac{6}{10}\\
+\end{cases}
+$$
+
+## a) P(\text{both red})
+
+$$
+\begin{align}
+& P(\text{both red}) \\
+&=P(\text{first red} \cap \text{second red}) \\
+&=P(\text{first urn})P(\text{first red} \cap \text{second red} \:\vert\: \text{first urn}) + P(\text{second urn})P(\text{first red} \cap \text{second red} \:\vert\: \text{second urn}) \\
+&=\frac{4}{10}P(\text{first red}\:\vert\: \text{first urn})P( \text{second red} \:\vert\: \text{first red} \cap \text{first urn}) + \frac{6}{10}P(\text{first red}\:\vert\: \text{second urn})P( \text{second red} \:\vert\: \text{first red} \cap \text{second urn}) \\
+
+&=\frac{4}{10}\frac{4}{10}\frac{3}{9} + \frac{6}{10}\frac{2}{10}\frac{1}{9} \\
+&=\frac{1}{15} = 6.\bar{66} \%
+\end{align}
+$$
+
+## b) P(\text{second blue})
+
+$$
+\begin{align}
+& P(\text{second blue}) \\
+
+&= P(\text{first blue})P(\text{second blue}\:\vert\:\text{first blue}) + P(\text{first not blue})P(\text{second blue} \:\vert\: \text{first not bblue}) \\
+
+&= P(\text{first urn})[ P(\text{first blue}\:\vert\:\text{first urn})P(\text{second blue}\:\vert\:\text{first blue}\cap \text{first urn}) + P(\text{first not blue}\:\vert\:\text{first urn})P(\text{second blue} \:\vert\: \text{first not blue}\cap \text{first urn})] \\
+&+ P(\text{second urn})[ P(\text{first blue}\:\vert\:\text{second urn})P(\text{second blue}\:\vert\:\text{first blue}\cap \text{second urn}) + P(\text{first not blue}\:\vert\:\text{second urn})P(\text{second blue} \:\vert\: \text{first not blue}\cap \text{second urn})] \\
+
+&=\frac{4}{10}[\frac{3}{10}\frac{2}{9} + \frac{7}{10}\frac{3}{9}] + \frac{6}{10}[ \frac{4}{10}\frac{3}{9} + \frac{6}{10}\frac{4}{9}] \\
+&=\frac{9}{25}=36 \%
+
+\end{align}
+$$
+
+## c) P(\text{second blue}\:\vert\:\text{first red})
+
+$$
+\begin{align}
+& P(\text{second blue}\:\vert\:\text{first red}) \\
+&=P(\text{second blue}\:\vert\:\text{first red} \cap \text{first urn})P(\text{first urn}\:\vert\:\text{first red}) \\
+&+P(\text{second blue}\:\vert\:\text{first red} \cap \text{secod urn})P(\text{secod urn}\:\vert\:\text{first red}) \\
+&=\frac{3}{9}\frac{P(\text{first red}\:\vert\:\text{first urn})P(\text{first urn})}{P(\text{first red})} +\frac{4}{9}[1-P(\text{first urn}\:\vert\:\text{first red})] \\
+&=\frac{3}{9}\underbrace{\frac{\frac{4}{10}\cdot\frac{4}{10}}{\frac{4}{10}\frac{4}{10}+\frac{6}{10}\frac{2}{10}}}_{=\frac{4}{7}}   +\frac{4}{9}[1-\underbrace{P(\text{first urn}\:\vert\:\text{first red})}_{=\frac{4}{7}}] \\
+&=\frac{3}{9}\frac{4}{7}   +\frac{4}{9}\frac{3}{7} \\
+&=\frac{8}{21} \approx 38.1 \%
+
+\end{align}
+$$
+
+By Bayes' theorem.
+
+```{r}
+runs = list
+
+count = 0
+N = 0
+for (i in 1:1000000) {
+  if (runif(1) <= 0.4) {
+    # first
+    if (runif(1) <= 0.4) {
+      # red
+      N = N + 1
+      if (runif(1) <= 3/9) {
+        # blue
+        count = count + 1
+      }
+    }
+  } else {
+    # second
+    if (runif(1) <= 0.2) {
+      # red
+      N = N + 1
+      if (runif(1) <= 4/9) {
+        # blue
+        count = count + 1
+      }
+    }
+  }
+}
+
+count / N
+```
+
+# 2.
+
+$$
+\begin{align}
+&P(\text{three different numbers each appear twice when 6 identical dice thrown}) \\
+&= \frac{\underbrace{6\choose 3}_{\text{N.o. ways to pick 3 different numbers from 6}} \times \underbrace{{6\choose 2}{4\choose 2}{2\choose 2}}_{\text{N.o. ways to order 3 in 6 positions numbers s.t. there are 2 each of them}}}
+{\underbrace{6^6}_{\text{N.o. combinations of 6 dice in 6 positions}}} \\
+&= \frac{20 \times 90}{46656} = \frac{25}{648} \approx 3.9 \%
+\end{align}
+$$
+
+```{r}
+N = 1000000
+count = 0
+for (k in 1:N) {
+  rolls = sample(1:6,6,TRUE)
+  tab = table(rolls)
+  if (nrow(tab) == 3 && sum(tab == c(2,2,2)) == 3) {
+    # print(rolls)
+    count = count + 1
+  }
+}
+
+count / N
+```
+
+```{r}
+require(pracma)
+(nchoosek(6, 3)*nchoosek(6, 2)*nchoosek(4, 2)*nchoosek(2, 2))/6^6
+```
+
+# 3.
+We have
+$$
+\begin{cases}
+P(A) = 25 \% \\
+P(B) = 35 \% \\
+P(C) = 40 \% \\
+P(\text{defective} \:\vert\: A) = 5 \% \\
+P(\text{defective} \:\vert\: B) = 4 \% \\
+P(\text{defective} \:\vert\: C) = 2 \% \\
+\end{cases}
+$$
+
+Which implies
+$$
+\begin{align}
+&P(\text{defective}) \\
+&= P(A)P(\text{defective} \:\vert\: A)+P(B)P(\text{defective} \:\vert\: B)+P(C)P(\text{defective} \:\vert\: C) \\
+&= 25 \% \cdot 5 \% + 35 \% \cdot 4 \% + 40 \% \cdot 2 \% \\
+&=\frac{69}{2000}=3.45 \%
+\end{align}
+$$
+
+
+
+As such:
+
+$$
+\begin{cases}
+&P(A \:\vert\: \text{defective}) =\frac{P(\text{defective} \:\vert\: A)P(A)}{P(\text{defective})}=\frac{25 \% \cdot 5 \%}{3.45 \%}=\frac{25}{69} \\
+&P(B \:\vert\: \text{defective}) =\frac{P(\text{defective} \:\vert\: B)P(B)}{P(\text{defective})}=\frac{35 \% \cdot 4 \%}{3.45 \%}=\frac{28}{69} \\
+&P(C \:\vert\: \text{defective}) =\frac{P(\text{defective} \:\vert\: C)P(C)}{P(\text{defective})}=\frac{40 \% \cdot 2 \%}{3.45 \%}=\frac{16}{69}
+\end{cases}
+$$
+
+## 4.
+
+We have 
+
+$$
+\begin{cases}
+\mathbb{E}[X]=\sum_{k=0}^nx_kP(X=x_k) \\
+var[X]=\mathbb{E}[(X-\mathbb{E}[X])^2]=\mathbb{E}[X^2]-\mathbb{E}[X]^2
+\end{cases}
+$$
+
+### a)
+$$
+\begin{align}
+\mathbb{E}[X + Y]&=\sum_{j=0}^{n_1} \sum_{k=0}^{n_2} (x_j+y_k)P(X=x_j,Y=y_k)\\
+&=\sum_{j=0}^{n_1} \sum_{k=0}^{n_2} x_jP(X=x_j,Y=y_k)+\sum_{j=0}^{n_1} \sum_{k=0}^{n_2} y_kP(X=x_j,Y=y_k)\\
+&=\sum_{j=0}^{n_1} x_jP(X=x_j)+ \sum_{k=0}^{n_2} y_kP(Y=y_k)\\
+&=\mathbb{E}[X] + \mathbb{E}[Y]\\
+\end{align}
+$$
+As $\sum_{k=0}^{n_2} x_jP(X=x_j,Y=y_k)=x_jP(X=x_j)$ and vice versa
+
+### b)
+$$
+\begin{align}
+var[X+Y]&= \mathbb{E}[(X+Y)^2]-\mathbb{E}[X+Y]^2\\
+&= \mathbb{E}[X^2+2XY+Y^2]-[\mathbb{E}[X]+\mathbb{E}[Y]]^2\\
+&= \mathbb{E}[X^2]+2\mathbb{E}[XY]+\mathbb{E}[Y^2]-\mathbb{E}[X]^2-2\mathbb{E}[X]\mathbb{E}[Y]-\mathbb{E}[Y]^2\\
+&= \underbrace{\mathbb{E}[X^2]-\mathbb{E}[X]^2}_{var[X]}+\underbrace{\mathbb{E}[Y^2]-\mathbb{E}[Y]^2}_{var[Y]}
+    +2(\underbrace{\underbrace{\mathbb{E}[XY]}_{=\mathbb{E}[X]\mathbb{E}[Y]}-\mathbb{E}[X]\mathbb{E}[Y])}_{=0}\\
+&= var[X]+var[Y]
+\end{align}
+$$
+As $X, Y$ indepedent $\implies \mathbb{E}[XY]=\mathbb{E}[X]\mathbb{E}[Y]$ as $P(X=x_j,Y=y_k)=P(X=x_j)(Y=y_k)$, proof similar to a)
+
+## 5.
+We have $P(T \le t)=1-e^{-\lambda t}=F(t)$
+
+### a)
+$$
+\begin{align}
+&P(\text{not arrive in d more seconds}) \\
+&= P(T > r+d \:\vert\:T>r) \\
+&= \frac{P(T > r+d \cap T>r)}{P(T>r)} \\
+&= \frac{P(T > r+d)}{P(T>r)} \\
+&= \frac{1-F(r+d)}{1-F(r)} \\
+&= \frac{e^{-\lambda (r+d)}}{e^{-\lambda r}} \\
+&= e^{-\lambda d} = 1-F(d)=P(T>d)\\
+\end{align}
+$$
+
+This is a result of the memorylessness property of the exponential distribution.
+
+### b)
+
+We have cumulative distribution function $F(t) \implies$ probability density function $f(t)=F'(t)=\lambda e^{-\lambda t}, t>=0$
+$$
+\begin{align}
+\mathbb{E}[T]&=\int_0^\infty t f(t) dt \\
+&=\int_0^\infty t \lambda e^{-\lambda t} dt \\
+&= - \big[ t e^{-\lambda t}\big]_0^\infty +\int_0^\infty e^{-\lambda t}dt \\
+
+&= -\big[\underbrace{\lim_{t \to \infty} t e^{-\lambda t}}_{=0} - \underbrace{\lim_{t \to 0} t e^{-\lambda t}}_{=0}\big] +\big[ -\frac{e^{-\lambda t}}{\lambda}\big]_0^\infty \\
+&= \frac{1}{\lambda}(\underbrace{\lim_{t \to \infty} -e^{-\lambda t}}_{=0} + \underbrace{\lim_{t \to 0} e^{-\lambda t}}_{=1}) \\
+&= \frac{1}{\lambda}
+\end{align}
+$$
+

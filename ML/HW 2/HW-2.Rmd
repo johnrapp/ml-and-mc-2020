@@ -1,0 +1,127 @@
+---
+title: "Untitled"
+author: "John Rapp Farnes"
+date: "4/5/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# 1.
+We want to prove
+
+$$
+\underbrace{A^TA \text{ nonsingular}}_{S_1} \Leftrightarrow \underbrace{A \text{ has linearly independent columns}}_{S_2}
+$$
+By definition:
+$$
+(Ax = 0 \Leftrightarrow x = 0) \Leftrightarrow A \text{ has linearly independent columns} \\
+\therefore \exists z \ne 0 \text{ s.t. } Az = 0 \Leftrightarrow A \text{ has linearly dependent columns}
+$$
+
+We also have the following property of singular matrices:
+$$
+A \text{ nonsingular} \Leftrightarrow (Ax = 0 \Leftrightarrow x = 0) \\
+\therefore A \text{ singular} \Leftrightarrow \exists z \ne 0 \text{ s.t. } Az = 0
+$$
+We also have:
+
+$$
+(S_1 \Leftrightarrow S_2) \Leftrightarrow (\lnot S_1 \Leftrightarrow \lnot S_2) \Leftrightarrow (A^TA \text{ singular} \Leftrightarrow A \text{ has linearly dependent columns})
+$$
+which we will try to prove by showing that $\lnot S_1 \implies \lnot S_2$ as well as $\lnot S_2 \implies \lnot S_1$.
+
+## $(\lnot S_1 \Leftrightarrow \lnot S_2)$
+$$
+A^TA \text{ singular} \implies \exists z \ne 0 \text{ s.t. } A^TAz = 0 \\
+\implies 0 = z^TA^TAz=(Az)^TAz=||Az||=0 \implies Az = 0\\
+\therefore \exists z \ne 0 \text{ s.t. } Az=0 \implies A \text{ has linearly dependent columns}
+$$
+
+
+
+## $(\lnot S_2 \Leftrightarrow \lnot S_1)$
+$$
+A \text{ has linearly dependent columns} \implies \exists z \ne 0 \text{ s.t. } Az = 0 \\ \implies
+A^TA z=A^T0=0 \implies A^TA \text{ singular}
+$$
+
+## 2.
+
+### (a)
+
+By definition:
+$$
+H \text{ symmetric} \Leftrightarrow H^T=H
+$$
+Where the transpose has the properties $(A^T)^T=A$, $(AB)^T=B^TA^T$ as well as $(A^{-1})^T=(A^T)^{-1}$, and $A^{-1}A=I$.
+
+We have:
+$$
+H^T=(X(X^TX)^{-1}X^T)^T=X\underbrace{((X^TX)^{-1})^T}_{=((X^TX)^T=(X^TX)^{-1}}X^T=X(X^TX)^{-1}X^T=H
+$$
+
+### (b)
+We have $H^1=H$, and for $k=2$:
+$$
+H^2=HH=X(X^TX)^{-1}\underbrace{X^TX(X^TX)^{-1}}_{=I}X^T=X(X^TX)^{-1}X^T=H
+$$
+For $k>2$ we have
+$$
+H^k=\underbrace{\underbrace{H \cdot H}_{=H} \cdots H \cdot H}_{k\text{ times}}=\underbrace{H \cdot H \cdots H \cdot H}_{k-1\text{ times}} =H^{k-1}
+$$
+which can be repeated until the exponent is 2. As such $H^k=H$
+
+### (c)
+We have $(I-H)^1=I-H$, and for $k=2$:
+$$
+(I-H)^2=(I-H)(I-H)=\underbrace{II}_{=I}-\underbrace{IH}_{=H}-\underbrace{HI}_{=H}+\underbrace{HH}_{=H}=I-H
+$$
+
+As such, the argument in (b) can be applied with the matrix $I-H$
+
+### (d)
+Since the value of $Trace$ is independent of the order of multiplication, we can rearrange as such:
+$$
+Trace(H)=Trace(X(X^TX)^{-1}X^T)=Trace(\underbrace{X^TX}_{\text{Dimension }M\times M}\:\underbrace{(X^TX)^{-1}}_{\text{Dimension }M\times M})=Trace(I_{M \times M})=M
+$$
+
+## 3.
+We have 
+$$
+\begin{aligned}
+&J(w_0,w_1)&&=\sum_{n=1}^{N}\alpha_n(w_0+w_1x_{n}-y_n)^2 \implies \\
+&\frac{dJ}{dw_0}&&=\sum_{n=1}^{N}2\alpha_n(w_0+w_1x_{n}-y_n) \\
+& &&=2[w_0\sum_{n=1}^{N}\alpha_n+w_1\sum_{n=1}^{N}\alpha_nx_n-\sum_{n=1}^{N}\alpha_ny_n] \\
+&\frac{dJ}{dw_1}&&=\sum_{n=1}^{N}2\alpha_nx_n(w_0+w_1x_{n}-y_n) \\
+& &&=2[w_0\sum_{n=1}^{N}\alpha_nx_n+w_1\sum_{n=1}^{N}\alpha_nx_n^2-\sum_{n=1}^{N}\alpha_nx_ny_n] \\
+
+\therefore &\nabla J &&= \begin{bmatrix}
+           2[w_0\sum_{n=1}^{N}\alpha_n(1+w_1x_n-y_n)] \\
+           2[w_0\sum_{n=1}^{N}\alpha_n(x_n+w_1x_n^2-x_ny_n)]
+         \end{bmatrix}
+\end{aligned}
+$$
+We can see that the $\alpha_i$ factors weight each of the terms in the sum of the gradient. This means that if $\alpha_j=0$ for some $j$, this obeservation will not be added in the calculation of neither the loss function nor the gradient, and the result will be the same as it was not included. If $\alpha_j >> \alpha_i \: \forall i$ then this term will dominate the sum in the gradient, and the gradient decent algorithm will "point" in the direction that fits that point well more than the others, i.e. dowards the minimum of the loss function in terms of that point.
+
+## 4.
+
+### (a)
+We have 
+
+$$
+\begin{aligned}
+J(w)&=-\sum_{i \in \mathbb{M}}y_iw^Tx_i \implies \\
+\nabla J(w) &= -\sum_{i \in \mathbb{M}}y_ix_i 
+\end{aligned}
+$$
+By the $\frac{d(w^Tb)}{w}=b$ rule, and linearity of the gradient operator.
+
+### (b)
+For $z_i=-y_iw^Tx_i$ we have $z_i > 0$ if $i$ is missclassified, and $z_i<0$ if $i$ is rightly classified (assuming no $z_i=0$). As such $\text{max}(0, z_i)=\begin{aligned}\begin{cases}-y_iw^Tx_i &\text{if the }i\text{th point is missclassified}\\0 &\text{else}\end{cases}\end{aligned}$. As such, if we let the set $\mathbb{M}$ include the missclassified points, we get that $\sum_{i=1}^M\text{max}(0, z_i)=-\sum_{i \in \mathbb{M}}y_iw^Tx_i$ as the rest of the terms are 0, and the equation is equivalent to (a) and therefore has the same solution.
+
+### (c)
+
+Yes they are equivalent. Performing the SGD algorithm is equivalent to taking the gradient at only one point $i$ at a time, so the gradient in that point becomes $\nabla J(w) = -y_ix_i$ for the missclassified points and $0$ for the correctly classified points. For SGD, we have the update rule $w_{k+1}=w_{k}-\eta \nabla J(w_k)=w_{k}+\eta y_ix_i$. With $\eta=1$, we add $y_ix_i$ to the current $w$ for every missclassified point, which is equivalent to the perceptron algorithm.
+
+
