@@ -124,12 +124,12 @@ metropolis_hastings <- function(q_sample, q_ratio, pi_ratio, N, initial_state) {
     proposed <- q_sample()
     
     alpha <- q_ratio(state, proposed) * pi_ratio(proposed, state)
-    
+
     if (alpha >= 1 || runif(1) <= alpha) {
       state <- proposed
     }
       
-    states <- append(states, state)
+    states <- append(states, list(state))
   }
   
   return (states)
@@ -288,14 +288,24 @@ sample_proposal <- function() rmvnorm(1, mean, sigma)
 proposal_likelihood <- function(x) dmvnorm(x, mean, sigma, log=FALSE)
 
 states <- metropolis_hastings(
-  sample_proposal,
+  function() c(sample_proposal()),
   function(x, y) proposal_likelihood(x) / proposal_likelihood(y),
   function(x, y) likelihood(data, x[1], x[2], x[3]) / likelihood(data, y[1], y[2], y[3]),
-  1000,
+  N,
   mean
 )
-
-states
 ```
+
+```{r}
+samples <- data.frame()
+for (s in states) {
+  samples <- rbind(samples, list(a=s[1],b=s[2],c=s[3]))
+}
+
+plot(0:N, samples$a, col="red", ylim=c(-10, 10))
+points(0:N, samples$b, col="green")
+points(0:N, samples$c, col="blue")
+```
+
 
 
