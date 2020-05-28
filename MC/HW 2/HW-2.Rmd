@@ -294,18 +294,33 @@ states <- metropolis_hastings(
   N,
   mean
 )
+
+# samples
 ```
 
 ```{r}
-samples <- data.frame()
+as <- c()
+bs <- c()
+cs <- c()
 for (s in states) {
-  samples <- rbind(samples, list(a=s[1],b=s[2],c=s[3]))
+  as <- c(as, s[1])
+  bs <- c(bs, s[2])
+  cs <- c(cs, s[3])
 }
+
+samples <- data.frame(a=as, b=bs, c=cs)
 
 plot(0:N, samples$a, col="red", ylim=c(-10, 10))
 points(0:N, samples$b, col="green")
 points(0:N, samples$c, col="blue")
 ```
+
+```{r}
+hist(samples$a)
+hist(samples$b)
+hist(samples$c)
+```
+
 
 
 
