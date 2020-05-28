@@ -2,26 +2,20 @@
 title: "STAT 202C - HW 3"
 author: "John Rapp Farnes / 405461225"
 date: "5/29/2020"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.height = 4)
 ```
 
-# 1)
+# Problem 7.1
 
 ## (a)
 
 Let $\pi \in \text{Gamma}(4.3,6.2)$ and proposal $g \in \text{Gamma}(4,7)$.
-
-For rejection sampling we want $Mg(x)\ge\pi(x)\forall x\Leftrightarrow\frac{Mg(x)}{\pi(x)}\ge1$. We have
-
-$$
-\frac{Mg(x)}{\pi(x)}=\frac{\beta_g^{\alpha_g}x^{\alpha_g-1}e^{-\beta_gx}/\Gamma(\alpha_g)}{\beta_\pi^{\alpha_\pi}x^{\alpha_\pi-1}e^{-\beta_\pi x}/\Gamma(\alpha_\pi)}
-=\frac{\beta_g^{\alpha_g}\Gamma(\alpha_\pi)}{\beta_\pi^{\alpha_\pi}\Gamma(\alpha_g)}x^{\alpha_g-\alpha_\pi}e^{-x(\beta_g-\beta_\pi)}\ge1
-$$
-TODO
 
 ```{r}
 alpha_pi <- 4.3
@@ -53,26 +47,51 @@ plot(x, g_distr(x), type="l", col="blue")
 lines(x, pi_distr(x), col="red")
 ```
 
+For rejection sampling we want $Mg(x)\ge\pi(x)\forall x\Leftrightarrow\frac{Mg(x)}{\pi(x)}\ge1$. We have
+
+$$
+\frac{Mg(x)}{\pi(x)}=M\frac{-\beta_g^{\alpha_g}x^{\alpha_g-1}e^{-x/\beta_g}/\Gamma(\alpha_g)}{\beta_\pi^{-\alpha_\pi}x^{\alpha_\pi-1}e^{-x/\beta_\pi }/\Gamma(\alpha_\pi)}
+=M\frac{\beta_g^{\alpha_\pi}\Gamma(\alpha_\pi)}{\beta_\pi^{\alpha_g}\Gamma(\alpha_g)}x^{\alpha_g-\alpha_\pi}e^{-x(1/\beta_g-1/\beta_\pi)}\ge1
+$$
+
+We have
+
+$$
+\frac{d}{dx}\frac{Mg(x)}{\pi(x)}=0\Leftrightarrow\\
+e^{-x(1/\beta_g-1/\beta_\pi)}[(\alpha_g-\alpha_\pi)x^{\alpha_g-\alpha_\pi-1}-(1/\beta_g-1/\beta_\pi)x^{\alpha_g-\alpha_\pi}]=0\Leftrightarrow\\
+x^*=\frac{(\alpha_g-\alpha_\pi)}{1/\beta_g-1/\beta_\pi}\implies\\
+M\ge\frac{\pi(x^*)}{g(x^*)}
+$$
+
+TODO
+
 ```{r}
-M <- 1.2
+x_star <- (alpha_g-alpha_pi)/(1/beta_g-1/beta_pi)
+x_star
+
+pi_distr(x_star) / g_distr(x_star)
+```
+
+```{r}
+# Use 1.1 to be sure
+M <- 1.1
 
 plot(x, M*g_distr(x), type="l", col="blue")
 lines(x, pi_distr(x), col="red")
-
-plot(x, M*g_distr(x) - pi_distr(x), type="l", col="red")
-sum(M*g_distr(x) - pi_distr(x) < 0)/length(x)
 ```
 
 
+
 ```{r}
-N <- 50000
+N <- 100000
+set.seed(2020)
 
 samples <- c()
 
 # TODO optimize?
 for (i in 1:N) {
-  x = g_sample(1)
-  r = pi_div_g_distr(x)/M
+  x <- g_sample(1)
+  r <- pi_div_g_distr(x)/M
   
   u = runif(1)
   if (r <= u) {
@@ -89,37 +108,48 @@ mean_sequence[length(mean_sequence)]
 ```
 
 ```{r}
-mean(rgamma(N*100, shape = alpha_pi, scale = beta_pi))
+theoretical_mean <- alpha_pi * beta_pi
+theoretical_mean
 ```
 
 ## (b)
 
 ```{r}
-initial_state <- 0
-state <- initial_state
-
-states <- c(state)
-
-for (i in 1:N) {
-  proposed <- g_sample()
+metropolis_hastings <- function(q_sample, q_ratio, pi_ratio, N, initial_state) {
+  state <- initial_state
   
-  Q_ratio <- g_distr(proposed) / g_distr(state)
-  pi_ratio <- pi_distr(proposed) / pi_distr(state)
-  alpha <- Q_ratio * pi_ratio
+  states <- list(state)
   
-  if (alpha >= 1 || runif(1) <= alpha) {
-    state <- proposed
-  }
+  for (i in 1:N) {
+    proposed <- q_sample()
     
-  states <- c(states, state)
+    alpha <- q_ratio(state, proposed) * pi_ratio(proposed, state)
+    
+    if (alpha >= 1 || runif(1) <= alpha) {
+      state <- proposed
+    }
+      
+    states <- append(states, state)
+  }
+  
+  return (states)
 }
 
+states <- unlist(metropolis_hastings(
+  g_sample,
+  function(x, y) g_distr(x) / g_distr(y),
+  function(x, y) pi_distr(x) / pi_distr(y),
+  N,
+  20
+))
+
 plot(states)
+plot(states[1:1000])
 
 mean_sequence <- cumsum(states) / seq_along(states)
 plot(mean_sequence)
 
-burn_in_length <- 5000
+burn_in_length <- 1000
 samples <- states[burn_in_length:length(states)]
 mean_sequence <- cumsum(samples) / seq_along(samples)
 plot(mean_sequence)
@@ -141,35 +171,131 @@ g2_sample <- function(n = 1) {
   rgamma(n, shape = alpha_g2, scale  = beta_g2)
 }
 
-initial_state <- 0
-state <- initial_state
-
-states <- c(state)
-
-for (i in 1:N) {
-  proposed <- g2_sample()
-  Q_ratio <- g2_distr(proposed) / g2_distr(state)
-  pi_ratio <- pi_distr(proposed) / pi_distr(state)
-  alpha <- Q_ratio * pi_ratio
-  
-  if (alpha >= 1 || runif(1) <= alpha) {
-    state <- proposed
-  }
-    
-  states <- c(states, state)
-}
+states <- unlist(metropolis_hastings(
+  g2_sample,
+  function(x, y) g2_distr(x) / g2_distr(y),
+  function(x, y) pi_distr(x) / pi_distr(y),
+  N,
+  20
+))
 
 plot(states)
+plot(states[1:1000])
 
-burn_in_length <- 10000
+mean_sequence <- cumsum(states) / seq_along(states)
+plot(mean_sequence)
 
+burn_in_length <- 1000
 samples <- states[burn_in_length:length(states)]
-
 mean_sequence <- cumsum(samples) / seq_along(samples)
-
 plot(mean_sequence)
 
 mean_sequence[length(mean_sequence)]
+```
+
+# Problem 7.20
+
+
+```{r}
+tab <- read.table("LogisticData.txt", header = TRUE, sep = "", dec = ".")
+
+head(tab)
+```
+
+## (a)
+
+$$
+\begin{aligned}
+\text{logit}(p_{ij})&=\log\frac{p_{ij}}{1-p_{ij}}=a+bx_i+cz_{ij}\Leftrightarrow\\
+p_{ij}&=\frac{\exp(a+bx_i+cz_{ij})}{1+\exp(a+bx_i+cz_{ij})}\implies\\
+1-p_{ij}&=\frac{1+\exp(a+bx_i+cz_{ij})}{1+\exp(a+bx_i+cz_{ij})}-\frac{\exp(a+bx_i+cz_{ij})}{1+\exp(a+bx_i+cz_{ij})}\\
+&=\frac{1}{1+\exp(a+bx_i+cz_{ij})}\\
+\therefore P(Y_{ij}=y_{ij}\forall i,j)&=\prod_{i=1}^{k}P(Y_{ij}=y_{ij}\forall j)\\
+&=\prod_{i=1}^{k}\prod_{j=1}^{n_i}p_{ij}^{y_{ij}}(1-p_{ij})^{1-y_{ij}}\\
+&=\prod_{i=1}^{k}\prod_{j=1}^{n_i}{\Big(\frac{\exp(a+bx_i+cz_{ij})}{1+\exp(a+bx_i+cz_{ij})}\Big)}^{y_{ij}}\Big(\frac{1}{1+\exp(a+bx_i+cz_{ij})}\Big)^{1-y_{ij}}
+\end{aligned}
+$$
+
+## (b)
+
+```{r}
+data <- data.frame(
+  emergency = tab$erodd,
+  # hmo = factor(tab$np),
+  # health = factor(tab$metq)
+  hmo = tab$np,
+  health = tab$metq
+)
+
+head(data)
+```
+
+```{r}
+logistic_model <- glm(emergency ~ hmo + health, data = data, family = "binomial")
+
+sum <- summary(logistic_model)
+
+sum
+```
+
+```{r}
+a_mean <- sum$coefficients["(Intercept)", "Estimate"]
+a_variance <- sum$coefficients["(Intercept)", "Std. Error"]^2
+
+b_mean <- sum$coefficients["hmo", "Estimate"]
+b_variance <- sum$coefficients["hmo", "Std. Error"]^2
+
+c_mean <- sum$coefficients["health", "Estimate"]
+c_variance <- sum$coefficients["health", "Std. Error"]^2
+
+tab <- data.frame(
+  a = c(a_mean, a_variance),
+  b = c(b_mean, b_variance),
+  c = c(c_mean, c_variance)
+)
+
+row.names(tab) <- c("Mean", "Variance")
+
+tab
+```
+
+## (c)
+
+```{r}
+library(mvtnorm)
+
+likelihood <- function(data, a, b, c) {
+  hmos <- unique(data$hmo)
+  k <- length(hmos)
+  
+  likelihood <- 1
+  
+  for (i in 1:k) {
+    indices <- which(data$hmo == hmos[i])
+    exp_factor <- exp(a + b*hmos[i]+c*data$health[indices])
+    
+    factors <- ifelse(data$emergency[indices], exp_factor, 1) / (1 + exp_factor)
+    
+    likelihood <- likelihood * prod(factors)
+  }
+  
+  return (likelihood)
+}
+
+mean <- c(a_mean, b_mean, c_mean)
+sigma <- diag(c(a_variance, b_variance, c_variance))
+sample_proposal <- function() rmvnorm(1, mean, sigma)
+proposal_likelihood <- function(x) dmvnorm(x, mean, sigma, log=FALSE)
+
+states <- metropolis_hastings(
+  sample_proposal,
+  function(x, y) proposal_likelihood(x) / proposal_likelihood(y),
+  function(x, y) likelihood(data, x[1], x[2], x[3]) / likelihood(data, y[1], y[2], y[3]),
+  1000,
+  mean
+)
+
+states
 ```
 
 
