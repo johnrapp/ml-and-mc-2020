@@ -15,7 +15,8 @@ knitr::opts_chunk$set(echo = TRUE, fig.height = 4)
 
 ## (a)
 
-Let $\pi \in \text{Gamma}(4.3,6.2)$ and proposal $g \in \text{Gamma}(4,7)$.
+Let $\pi \in \text{Gamma}(4.3,6.2)$ and proposal $g \in \text{Gamma}(4,7)$ as well as $g_2 \in \text{Gamma}(5,6)$. In order to perform rejection sampling, we need first to calculate an appropriate $M$ s.t. $Mg(x)\ge\pi(x)\forall x$. Below is a plot of $g(x)$ and $pi(x)$, corresponding to $M=1$.
+
 
 ```{r}
 alpha_pi <- 4.3
@@ -37,24 +38,25 @@ g_sample <- function(n = 1) {
 }
 
 pi_div_g_distr <- function(x) {
-  # TODO make more computationally efficient
   pi_distr(x) / g_distr(x)
 }
   
 x <- seq(0, 50, 0.01)
 
-plot(x, g_distr(x), type="l", col="blue")
-lines(x, pi_distr(x), col="red")
+plot(x, pi_distr(x), col="red", type="l")
+lines(x, g_distr(x), col="blue")
+legend("topright", legend=c("pi(x)", "Mg(x)"),
+       col=c("red", "blue"), lty=1 , cex=0.8)
 ```
 
-For rejection sampling we want $Mg(x)\ge\pi(x)\forall x\Leftrightarrow\frac{Mg(x)}{\pi(x)}\ge1$. We have
+In order to determine $M$, we can maximize solve $Mg(x)\ge\pi(x)\forall x\Leftrightarrow\frac{Mg(x)}{\pi(x)}\ge1$ for $M$. We have
 
 $$
 \frac{Mg(x)}{\pi(x)}=M\frac{-\beta_g^{\alpha_g}x^{\alpha_g-1}e^{-x/\beta_g}/\Gamma(\alpha_g)}{\beta_\pi^{-\alpha_\pi}x^{\alpha_\pi-1}e^{-x/\beta_\pi }/\Gamma(\alpha_\pi)}
 =M\frac{\beta_g^{\alpha_\pi}\Gamma(\alpha_\pi)}{\beta_\pi^{\alpha_g}\Gamma(\alpha_g)}x^{\alpha_g-\alpha_\pi}e^{-x(1/\beta_g-1/\beta_\pi)}\ge1
 $$
 
-We have
+Finding the minimum by stationary point:
 
 $$
 \frac{d}{dx}\frac{Mg(x)}{\pi(x)}=0\Leftrightarrow\\
@@ -63,8 +65,6 @@ x^*=\frac{(\alpha_g-\alpha_\pi)}{1/\beta_g-1/\beta_\pi}\implies\\
 M\ge\frac{\pi(x^*)}{g(x^*)}
 $$
 
-TODO
-
 ```{r}
 x_star <- (alpha_g-alpha_pi)/(1/beta_g-1/beta_pi)
 x_star
@@ -72,15 +72,19 @@ x_star
 pi_distr(x_star) / g_distr(x_star)
 ```
 
+Hence, we can use $M=1.1$ to be sure, plot below:
+
 ```{r}
-# Use 1.1 to be sure
 M <- 1.1
 
 plot(x, M*g_distr(x), type="l", col="blue")
 lines(x, pi_distr(x), col="red")
+legend("topright", legend=c("pi(x)", "Mg(x)"),
+       col=c("red", "blue"), lty=1 , cex=0.8)
+
 ```
 
-
+Below is a plot of the estimated mean, as the number of samples increase, with 100000 in total.
 
 ```{r}
 N <- 100000
@@ -88,7 +92,6 @@ set.seed(2020)
 
 samples <- c()
 
-# TODO optimize?
 for (i in 1:N) {
   x <- g_sample(1)
   r <- pi_div_g_distr(x)/M
@@ -102,17 +105,25 @@ for (i in 1:N) {
 }
 
 mean_sequence <- cumsum(samples) / seq_along(samples)
-plot(mean_sequence)
+plot(mean_sequence, main="Estimated mean by rejection sampling with g(x)", xlab = "Iteration", ylab="Estimated mean")
 
-mean_sequence[length(mean_sequence)]
+est_mean <- mean_sequence[length(mean_sequence)]
 ```
+
+The estimated value was `r est_mean`, this is fairly close to the teoretical value:
 
 ```{r}
 theoretical_mean <- alpha_pi * beta_pi
 theoretical_mean
 ```
 
+Looking at the plot, we can see that the estimate moves a lot during the first iterations, but settles after less than 10 000 iterations, after which it converges to the estimated value. After 100000 values, it appears to have fully converged.
+
+\newpage
+
 ## (b)
+
+Below is an implementation of the Metropolis-Hasting algortihm, and its estimate using $g$ as a proposal distribution, for 100000 iterations with $x=20$ as initial state.
 
 ```{r}
 metropolis_hastings <- function(q_sample, q_ratio, pi_ratio, N, initial_state) {
@@ -134,7 +145,9 @@ metropolis_hastings <- function(q_sample, q_ratio, pi_ratio, N, initial_state) {
   
   return (states)
 }
+```
 
+```{r}
 states <- unlist(metropolis_hastings(
   g_sample,
   function(x, y) g_distr(x) / g_distr(y),
@@ -143,21 +156,55 @@ states <- unlist(metropolis_hastings(
   20
 ))
 
-plot(states)
-plot(states[1:1000])
+plot(states, main = "MCMC state for g", xlab = "Iteration", ylab = "State")
+plot(states[1:1000], main = "First 1000 MCMC states", xlab = "Iteration", ylab = "State")
 
 mean_sequence <- cumsum(states) / seq_along(states)
-plot(mean_sequence)
+plot(mean_sequence, main="Estimated mean by MCMC with g(x) as proposal", xlab = "Iteration", ylab="Estimated mean")
 
 burn_in_length <- 1000
 samples <- states[burn_in_length:length(states)]
 mean_sequence <- cumsum(samples) / seq_along(samples)
-plot(mean_sequence)
+plot(mean_sequence, main="Estimated mean by MCMC, after the first 1000 iterations", xlab = "Iteration", ylab="Estimated mean")
 
-mean_sequence[length(mean_sequence)]
+est_mean <- mean_sequence[length(mean_sequence)]
 ```
 
+The estimated value was `r est_mean`, which again is close to the teoretical value.
+
+Looking at convergence, we can see that the chain quickly appears to move between states consistent with the final distribution, with a short burn-in period. This is however hard to see directly in the plot, as the proposal distribution is very similar to the target. In addition, it quickly moves from neighborhood of the initial state. Using coda, we can analyse the result further. There are many diagnostics of convergence, and following I will show the most relevant ones.
+
+
+```{r}
+library(coda)
+effective_percent <- effectiveSize(states) / N
+```
+
+The ratio of the effective size and $N$ was `r effective_percent`, which is fairly high, meaning most samples are used.
+
+```{r, fig.height=4}
+par(mar=c(1,1,1,1))
+autocorr.plot(states)
+```
+Looking at the autocorrelation-plot above, it is low for lags greater than 0. Below is the value of the Geweke's Convergence Diagnostic:
+
+```{r, fig.height=4}
+geweke.diag(states)
+```
+
+We can see that the value is not significant, as its value is much lower than 2, this confirms that the burn in period of the chain is short. Below is the result of the Heidelberger And Welch's Convergence Diagnostic:
+
+
+```{r}
+heidel.diag(states)
+```
+
+The MCMC passed the stationarity test.
+
+\newpage
+
 ## (c)
+Below is the MCMC estimate using $g_2$ as a proposal distribution, for 100000 iterations with $x=20$ as initial state.
 
 ```{r}
 alpha_g2 <- 5
@@ -179,19 +226,49 @@ states <- unlist(metropolis_hastings(
   20
 ))
 
-plot(states)
-plot(states[1:1000])
+plot(states, main = "MCMC state for g_2", xlab = "Iteration", ylab = "State")
+plot(states[1:1000], main = "First 1000 MCMC states", xlab = "Iteration", ylab = "State")
 
 mean_sequence <- cumsum(states) / seq_along(states)
-plot(mean_sequence)
+plot(mean_sequence, main="Estimated mean by MCMC with g_2(x) as proposal", xlab = "Iteration", ylab="Estimated mean")
 
 burn_in_length <- 1000
 samples <- states[burn_in_length:length(states)]
 mean_sequence <- cumsum(samples) / seq_along(samples)
-plot(mean_sequence)
+plot(mean_sequence, main="Estimated mean by MCMC, after the first 1000 iterations", xlab = "Iteration", ylab="Estimated mean")
 
-mean_sequence[length(mean_sequence)]
+est_mean <- mean_sequence[length(mean_sequence)]
 ```
+
+The estimated value was `r est_mean`, again close to the teoretical value.
+
+As in (b), the chain quickly appears to move between states consistent with the final distribution, with a short burn-in period.
+
+
+```{r}
+effective_percent <- effectiveSize(states) / N
+```
+
+The ratio of the effective size and $N$ was `r effective_percent`, which is lower than in (b), only about half of the samples are used. As such, this proposal distribution is less appropriate for the estimation of $\pi(x)$.
+
+```{r, fig.height=4}
+autocorr.plot(states)
+```
+Looking at the autocorrelation-plot above, it is low for lags greater than 0. Below is the value of the Geweke's Convergence Diagnostic:
+
+```{r, fig.height=4}
+geweke.diag(states)
+```
+
+We can see that the value is not significant, as its value is lower than 2, which confirms that the burn in time is fairly short. However, this value is greater than in (b). Below is the result of the Heidelberger And Welch's Convergence Diagnostic:
+
+```{r}
+heidel.diag(states[1:(length(states) - 1)])
+```
+
+This MCMC passed the stationarity test as well.
+
+\newpage
 
 # Problem 7.20
 
@@ -203,6 +280,8 @@ head(tab)
 ```
 
 ## (a)
+
+Below is a derivation of the likelihood function for the problem:
 
 $$
 \begin{aligned}
@@ -216,13 +295,15 @@ p_{ij}&=\frac{\exp(a+bx_i+cz_{ij})}{1+\exp(a+bx_i+cz_{ij})}\implies\\
 \end{aligned}
 $$
 
+\newpage
+
 ## (b)
+
+Using R, we can make a GLM logistic regression estimation:
 
 ```{r}
 data <- data.frame(
   emergency = tab$erodd,
-  # hmo = factor(tab$np),
-  # health = factor(tab$metq)
   hmo = tab$np,
   health = tab$metq
 )
@@ -234,9 +315,9 @@ head(data)
 logistic_model <- glm(emergency ~ hmo + health, data = data, family = "binomial")
 
 sum <- summary(logistic_model)
-
-sum
 ```
+
+The results of the regression are found in the table below:
 
 ```{r}
 a_mean <- sum$coefficients["(Intercept)", "Estimate"]
@@ -259,7 +340,11 @@ row.names(tab) <- c("Mean", "Variance")
 tab
 ```
 
+\newpage
+
 ## (c)
+
+Following is an implementation of an MCMC with 100000 iterations, independent normal distributions with sample mean and variance from the logistical model for the parameters, and sample mean as initial state.
 
 ```{r}
 library(mvtnorm)
@@ -294,9 +379,9 @@ states <- metropolis_hastings(
   N,
   mean
 )
-
-# samples
 ```
+
+Below are plots of the value of $a$, $b$ and $c$ as the MCMC runs:
 
 ```{r}
 as <- c()
@@ -310,17 +395,17 @@ for (s in states) {
 
 samples <- data.frame(a=as, b=bs, c=cs)
 
-plot(0:N, samples$a, col="red", ylim=c(-10, 10))
+plot(0:N, samples$a, col="red", ylim=c(-10, 10), main="Parameter values in the MCMC", xlab = "Iteration", ylab = "State")
 points(0:N, samples$b, col="green")
 points(0:N, samples$c, col="blue")
+legend("topright", legend=c("a", "b", "c"),
+       col=c("red", "green", "blue"), lty=1 , cex=0.8)
 ```
+
+Finally, histograms of the paramter values:
 
 ```{r}
-hist(samples$a)
-hist(samples$b)
-hist(samples$c)
+hist(samples$a, main="Histogram of a")
+hist(samples$b, main="Histogram of b")
+hist(samples$c, main="Histogram of c")
 ```
-
-
-
-
