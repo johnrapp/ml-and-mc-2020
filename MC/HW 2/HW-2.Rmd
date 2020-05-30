@@ -168,6 +168,9 @@ mean_sequence <- cumsum(samples) / seq_along(samples)
 plot(mean_sequence, main="Estimated mean by MCMC, after the first 1000 iterations", xlab = "Iteration", ylab="Estimated mean")
 
 est_mean <- mean_sequence[length(mean_sequence)]
+
+library(coda)
+states <- mcmc(states)
 ```
 
 The estimated value was `r est_mean`, which again is close to the teoretical value.
@@ -176,7 +179,6 @@ Looking at convergence, we can see that the chain quickly appears to move betwee
 
 
 ```{r}
-library(coda)
 effective_percent <- effectiveSize(states) / N
 ```
 
@@ -238,6 +240,8 @@ mean_sequence <- cumsum(samples) / seq_along(samples)
 plot(mean_sequence, main="Estimated mean by MCMC, after the first 1000 iterations", xlab = "Iteration", ylab="Estimated mean")
 
 est_mean <- mean_sequence[length(mean_sequence)]
+
+states <- mcmc(states)
 ```
 
 The estimated value was `r est_mean`, again close to the teoretical value.
@@ -254,7 +258,7 @@ The ratio of the effective size and $N$ was `r effective_percent`, which is lowe
 ```{r, fig.height=4}
 autocorr.plot(states)
 ```
-Looking at the autocorrelation-plot above, it is low for lags greater than 0. Below is the value of the Geweke's Convergence Diagnostic:
+Looking at the autocorrelation-plot above, it is low for lags greater than 0, however higher than in (b). Below is the value of the Geweke's Convergence Diagnostic:
 
 ```{r, fig.height=4}
 geweke.diag(states)
@@ -402,10 +406,34 @@ legend("topright", legend=c("a", "b", "c"),
        col=c("red", "green", "blue"), lty=1 , cex=0.8)
 ```
 
-Finally, histograms of the paramter values:
+Histograms of the paramter values:
 
 ```{r}
 hist(samples$a, main="Histogram of a")
 hist(samples$b, main="Histogram of b")
 hist(samples$c, main="Histogram of c")
 ```
+
+Density estinates:
+
+```{r}
+densplot(mcmc(samples$a), main="Density estimate of a")
+densplot(mcmc(samples$b), main="Density estimate of b")
+densplot(mcmc(samples$c), main="Density estimate of c")
+```
+
+Estimates of mean and variance from the MCMC:
+
+```{r}
+tab <- data.frame(
+  a = c(mean(samples$a), sd(samples$a)^2),
+  b = c(mean(samples$b), sd(samples$b)^2),
+  c = c(mean(samples$c), sd(samples$c)^2)
+)
+
+row.names(tab) <- c("Mean", "Variance")
+
+tab
+```
+
+As seen in the table, the mean and variance of the MCMC is very similar to the estimate from the GLM.
