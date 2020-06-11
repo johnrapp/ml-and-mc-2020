@@ -17,6 +17,8 @@ MVP:
   3. Conditional på förra framen
 - Likelihood
   1. Rektangel överlapp
+  1.1 Rektangel, hårt straff
+  1.2 Rektagel, mjukt straff
   2. Ellips överlapp
   3. Parametriska människoformer
 - Proposal
@@ -177,7 +179,7 @@ library(jpeg)
 jj <- readJPEG("./caviar_frames/ThreePastShop1cor0000.jpg",native=FALSE)
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
 
-w <- 348
+w <- 384
 h <- 288
 
 # jj[seq(100, 1000)] = rep(1, 901)
@@ -397,3 +399,70 @@ for (i in is) {
 
 
 ```
+
+```{r}
+# k, x, y, w, h
+
+library(jpeg)
+w <- 384
+h <- 288
+
+f <- 100
+jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(jj,0,0,1,1)
+
+threshold <- 0.2
+background_subtraction <- function(img, background) {
+  for (i in 1:h) {
+    for (j in 1:w) {
+      img[i, j, c(1,2,3)] <- max(min(
+        ifelse(abs(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)])) < threshold, 0, 1)
+      , 1), 0)
+    }
+  }
+  return (img)
+}
+
+foreground <- background_subtraction(jj, background)
+
+# jj[h, w, 3]
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(foreground,0,0,1,1)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(jj,0,0,1,1)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(background,0,0,1,1)
+```
+
+```{r}
+set.seed(2020)
+state = list(
+  k = 10,
+  points = list(
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
+    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100)
+  )
+)
+
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(foreground,0,0,1,1)
+
+for (i in 1:state$k) {
+  point <- state$points[[i]]
+  rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+}
+
+
+
+```
+
+
