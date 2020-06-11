@@ -1,0 +1,399 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Idé: eigen value compression för att få fram bakgrund 
+
+MVP:
+- Bakgrundsmodel
+  1. Average över frames på samma klipp, differencing / threshold
+  2. Average över frames flera klipp
+  3. Gaussian, över sigma
+  4. Frame differencing
+- Priors
+  1. Uniform
+  2. Parametrisk x, y, k, size från heat map
+  3. Conditional på förra framen
+- Likelihood
+  1. Rektangel överlapp
+  2. Ellips överlapp
+  3. Parametriska människoformer
+- Proposal
+  1. Uniform
+  2. K-means på pixlar / ellipsfitting 
+- Accuracy
+  1. Antal personer
+  2. Antal personer + överlapp
+  3. Antal personer + labels
+- Över frames
+  1. Inget
+  2. Drift / diffusion
+
+```{r}
+library(jpeg)
+jj <- readJPEG("./mall_dataset/frames/seq_000001.jpg",native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+
+w <- 640
+h <- 480
+
+jj[seq(100, 1000)] = rep(1, 901)
+jj[seq(100, 1000) + w*h] = rep(0, 901)
+jj[seq(100, 1000) + 2*w*h] = rep(0, 901)
+
+
+rasterImage(jj,0,0,1,1)
+```
+
+```{r}
+library(rmatio)
+ground_truth <- read.mat("./mall_dataset/mall_gt.mat")
+
+
+# ground_truth$frame[[1]][[2000]]$loc[[1]][,1]
+
+jj <- readJPEG("./mall_dataset/frames/seq_000001.jpg",native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+
+rasterImage(jj,0,0,1,1)
+
+points(ground_truth$frame[[1]][[1]]$loc[[1]][,1] / w, 1-ground_truth$frame[[1]][[1]]$loc[[1]][,2] / h)
+```
+
+```{r}
+jpgs <- list()
+# frames <- 2000
+frames <- 1000
+# background <- rep(0, w*h*3)
+background <- jj / frames
+for (f in 2:frames) {
+  jpg <- readJPEG(paste("./mall_dataset/frames/seq_",strrep("0", 6-log10(f + 1)),f,".jpg", sep=""),native=FALSE)
+  # for (i in 1:(w*h*3)) {
+  for (i in 1:h) {
+    for (j in 1:w) {
+      for (c in 1:3) {
+        background[i, j, c] <- background[i, j, c] + jpg[i, j, c] / frames
+      }
+    }
+  }
+}
+
+for (i in 1:h) {
+  for (j in 1:w) {
+    for (c in 1:3) {
+        background[i, j, c] <- max(min(background[i, j, c], 1), 0)
+    }
+  }
+}
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+# rasterImage(background,0,0,1,1)
+rasterImage(background,0,0,1,1)
+```
+
+```{r}
+# jj <- readJPEG("./mall_dataset/frames/seq_000001.jpg",native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+
+rasterImage(jj,0,0,1,1)
+
+locs <- list()
+
+for (f in 1:frames) {
+  points(ground_truth$frame[[1]][[f]]$loc[[1]][,1] / w, 1-ground_truth$frame[[1]][[f]]$loc[[1]][,2] / h)
+}
+
+
+```
+
+```{r}
+jj <- readJPEG("./mall_dataset/frames/seq_000001.jpg",native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+
+interp <- function(x) -20*x^7+70*x^6-84*x^5+35*x^4
+
+for (i in 1:h) {
+  for (j in 1:w) {
+    # for (c in 1:3) {
+        # jj[i, j, c] <- max(min(jj[i, j, c] - background[i, j, c], 1), 0)
+        # jj[i, j, c] <- max(min(-(sum(jj[i, j, c(1,2,3)])/3 - sum(background[i, j, c(1,2,3)])/3), 1), 0)
+        # jj[i, j, c] <- max(min(mean(jj[i, j, c(1,2,3)]), 1), 0)
+        # jj[i, j, c(1,2,3)] <- max(min(interp(1-(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)]))), 1), 0)
+        jj[i, j, c(1,2,3)] <- max(min(
+          # ifelse(abs(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)])) < 0.1, 0, mean(jj[i, j, c(1,2,3)]))
+          ifelse(abs(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)])) < 0.1, 0, 1)
+        , 1), 0)
+    # }
+  }
+}
+
+rasterImage(jj,0,0,1,1)
+# points(ground_truth$frame[[1]][[1]]$loc[[1]][,1] / w, 1-ground_truth$frame[[1]][[1]]$loc[[1]][,2] / h, col="red")
+```
+```{r}
+jj <- readJPEG("./mall_dataset/frames/seq_000001.jpg",native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(jj,0,0,1,1)
+
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(background,0,0,1,1)
+```
+
+```{r}
+r <- c()
+g <- c()
+# frames <- 2000
+frames <- 1000
+i <- 200
+j <- 300
+# background <- rep(0, w*h*3)
+for (f in 1:frames) {
+  jpg <- readJPEG(paste("./mall_dataset/frames/seq_",strrep("0", 6-log10(f + 1)),f,".jpg", sep=""),native=FALSE)
+  # for (i in 1:(w*h*3)) {
+  # for (i in 1:h) {
+    # for (j in 1:w) {
+
+      r <- c(r, jpg[i, j, 1])
+      g <- c(g, jpg[i, j, 2])
+    # }
+  # }
+}
+
+plot(r, g, xlim=c(0,1), ylim=c(0,1))
+```
+
+```{r}
+frames <- seq(1, 2000, by=2000/200)
+frame_paths <- paste0("./mall_dataset/frames/seq_",strrep("0", 6-log10(frames + 1)),frames,".jpg")
+# frames <- paste0("./mall_dataset/frames/seq_",strrep("0", 6-log10(1:100 + 1)),1:100,".jpg")
+library(magick)
+m <- image_read(frame_paths)
+m <- image_animate(m)
+image_write(m, "./movie10.gif")
+```
+
+```{r}
+library(jpeg)
+jj <- readJPEG("./caviar_frames/ThreePastShop1cor0000.jpg",native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+
+w <- 348
+h <- 288
+
+# jj[seq(100, 1000)] = rep(1, 901)
+# jj[seq(100, 1000) + w*h] = rep(0, 901)
+# jj[seq(100, 1000) + 2*w*h] = rep(0, 901)
+
+
+rasterImage(jj,0,0,1,1)
+```
+
+```{r}
+library(XML)
+# library(methods)
+
+# f <- 500
+# f <- 1200
+for (f in round(seq(2, 1600, length.out = 100))) {
+# jj <- readJPEG(paste("./caviar_frames/ThreePastShop1cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+
+# result <- xmlParse(file = "./c3ps1gt.xml")
+result <- xmlParse(file = "./c2es2gt.xml")
+
+# print(result)
+
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(jj,0,0,1,1)
+
+rootnode <- xmlRoot(result)
+is<-1:length(xmlElementsByTagName(rootnode[[f]][[1]], "object"))
+for (i in is) {
+  attrs <- xmlAttrs(rootnode[[f]][[1]][[i]][[2]])
+  box <- list(
+    w=as.numeric(attrs["w"]),
+    h=as.numeric(attrs["h"]),
+    x=as.numeric(attrs["xc"]),
+    y=as.numeric(attrs["yc"]),
+    xy = c(as.numeric(attrs["xc"]), as.numeric(attrs["yc"]))
+  )
+  box
+  
+  rect((box$x - box$w/2) / w, 1-(box$y - box$h/2) / h, (box$x + box$w/2)/w, 1-(box$y + box$h/2)/h)
+}
+
+}
+
+
+```
+
+```{r}
+# rect((box$x-box$w/4) / w, 1-(box$y - box$h/2) / h, (box$x-box$w/4)/w, 1-(box$y + box$h/2)/h)
+# points(box$x/w, 1-box$y/h, col="green")
+# points((box$x-box$w)/w, 1-box$y/h, col="red")
+# points((box$x-box$w/2)/w, 1-box$y/h, col="red")
+# points((box$x+box$w)/w, 1-box$y/h, col="red")
+# points((box$x+box$w/2)/w, 1-box$y/h, col="red")
+# 
+# points((box$x)/w, 1-(box$y-box$h/2)/h, col="red")
+# points((box$x)/w, 1-(box$y-box$h)/h, col="red")
+# points((box$x)/w, 1-(box$y+box$h/2)/h, col="red")
+# points((box$x)/w, 1-(box$y+box$h)/h, col="red")
+# 
+# p1 <- c(91-10,163)
+# # p2 <- c(91/w,163/h)
+# p3 <- c(98-10,266)
+# p4 <- c(322-10,265)
+# 
+# points(p1[1]/w, 1-p1[2]/h, col="orange")
+# points(p3[1]/w, 1-p3[2]/h, col="orange")
+# points(p4[1]/w, 1-p4[2]/h, col="orange")
+
+# Y <- (p1-p3)
+# # Y <- (p3-p1)
+# Y <- Y/norm(Y, type="2")
+# X <- p4-p3
+# X <- X/norm(X, type="2")
+# 
+# # points(box$xy%*%X/w, 1-box$xy%*%Y/h, col="green")
+# p <- box$x%*%X + box$y%*%Y
+# points(p[1]/w, 1-p[2]/h, col="blue")
+
+# lines(rep(0.5, 100), seq(0.01, 1, 0.01))
+
+# pp <- c(seq(from=0*Y[1], to=1*Y[1], length.out = 100), seq(from=0*Y[2], to=1*Y[2], length.out = 100))
+# # pp <- rep(0.5*X, 100) + c(seq(from=0*Y[1], to=1*Y[1], length.out = 100), seq(from=0*Y[2], to=1*Y[2], length.out = 100))
+# lines(pp[seq(1, 200, by=2)], 1-pp[seq(2, 200, by=2)])
+# %*%
+
+# plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+# for (t in seq(0, 1, by=0.01)) {
+# t <- seq(0, h/2, by=0.01)
+# s <- seq(0, w/2, by=0.01)
+# 
+# for (t in seq(0, h/2, length.out = 20)) {
+#   for (s in seq(0, w/2, length.out = 20)) {
+#     p <- Y*t + X*s
+#     # p <- Y*t
+#     # points(p[1]/w + p3[1]/w, 1-(p[2] + p3[2])/h)
+#     points(p[1]/w, -(p[2])/h)
+#     # points(p[1]/w + p3[1]/w, 1-(Y[2]*t/h + p3[2])/h)
+#     # points(Y[1]*t/w+ p3[1]/w, 1-(Y[2]*t+ p3[2])/h)
+#   }
+# }
+# p <- X*box$x + Y*box$y
+# # # p <- Y*t
+# points(p[1]/w, -(p[2])/h, col="purple")
+# points(0/w, h/h, col="purple")
+
+
+# points(Y[1]*t/w+ p3[1]/w, 1-(Y[2]*t+ p3[2])/h)
+# points(Y[1]*t/w+ p3[1]/w, 1-(Y[2]*t+ p3[2])/h)
+# points(Y[1]*box$y/w+ p3[1]/w, 1-(Y[2]*box$y+ p3[2])/h)
+
+
+# points(((p1-p3)[1]*t)/w, 1-((p1-p3)[2]*t)/h, col="green")
+# }
+```
+
+```{r}
+# frames <- 2000
+frames <- round(seq(2, 1600, length.out = 100))
+# background <- rep(0, w*h*3)
+jj <- readJPEG("./caviar_frames/ThreePastShop1cor0000.jpg",native=FALSE)
+background <- jj / length(frames)
+for (f in frames) {
+# jj <- readJPEG(paste("./caviar_frames/ThreePastShop1cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+  jpg <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+  # for (i in 1:(w*h*3)) {
+  for (i in 1:h) {
+    for (j in 1:w) {
+      for (c in 1:3) {
+        background[i, j, c] <- background[i, j, c] + jpg[i, j, c] / length(frames)
+      }
+    }
+  }
+}
+
+for (i in 1:h) {
+  for (j in 1:w) {
+    for (c in 1:3) {
+        background[i, j, c] <- max(min(background[i, j, c], 1), 0)
+    }
+  }
+}
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+# rasterImage(background,0,0,1,1)
+rasterImage(background,0,0,1,1)
+```
+
+```{r}
+for (f in round(seq(2, 1600, length.out = 10))) {
+# jj <- readJPEG(paste("./caviar_frames/ThreePastShop1cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(jj,0,0,1,1)
+
+interp <- function(x) -20*x^7+70*x^6-84*x^5+35*x^4
+
+for (i in 1:h) {
+  for (j in 1:w) {
+    # for (c in 1:3) {
+        # jj[i, j, c] <- max(min(jj[i, j, c] - background[i, j, c], 1), 0)
+        # jj[i, j, c] <- max(min(-(sum(jj[i, j, c(1,2,3)])/3 - sum(background[i, j, c(1,2,3)])/3), 1), 0)
+        # jj[i, j, c] <- max(min(mean(jj[i, j, c(1,2,3)]), 1), 0)
+        # jj[i, j, c(1,2,3)] <- max(min(interp(1-(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)]))), 1), 0)
+        jj[i, j, c(1,2,3)] <- max(min(
+          # ifelse(abs(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)])) < 0.1, 0, mean(jj[i, j, c(1,2,3)]))
+          ifelse(abs(mean(jj[i, j, c(1,2,3)])-mean(background[i, j, c(1,2,3)])) < 0.2, 0, 1)
+        , 1), 0)
+    # }
+  }
+}
+
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(jj,0,0,1,1)
+# points(ground_truth$frame[[1]][[1]]$loc[[1]][,1] / w, 1-ground_truth$frame[[1]][[1]]$loc[[1]][,2] / h, col="red")
+}
+# plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+# rasterImage(background,0,0,1,1)
+```
+
+```{r}
+# library(methods)
+
+# f <- 500
+# f <- 1200
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(background,0,0,1,1)
+
+result <- xmlParse(file = "./c2es2gt.xml")
+rootnode <- xmlRoot(result)
+
+for (f in round(seq(2, 1600, 1))) {
+# jj <- readJPEG(paste("./caviar_frames/ThreePastShop1cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+# jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+
+# result <- xmlParse(file = "./c3ps1gt.xml")
+
+is<-1:length(xmlElementsByTagName(rootnode[[f]][[1]], "object"))
+for (i in is) {
+  attrs <- xmlAttrs(rootnode[[f]][[1]][[i]][[2]])
+  box <- list(
+    w=as.numeric(attrs["w"]),
+    h=as.numeric(attrs["h"]),
+    x=as.numeric(attrs["xc"]),
+    y=as.numeric(attrs["yc"]),
+    xy = c(as.numeric(attrs["xc"]), as.numeric(attrs["yc"]))
+  )
+  # box
+  
+  points(box$x/w, 1-box$y/h)
+  
+  # rect((box$x - box$w/2) / w, 1-(box$y - box$h/2) / h, (box$x + box$w/2)/w, 1-(box$y + box$h/2)/h)
+}
+
+}
+
+
+```
