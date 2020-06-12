@@ -3,6 +3,37 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+# Abstract
+# Introduction
+## Background
+## Problem description
+## Earlier work ?
+# Model
+## Data set
+## Background subtraction
+## Priors
+Camera geometry extension
+## Likelihood
+# Simulation
+## Proposals
+## MCMC setup
+# Result
+## Accuracy
+# Discussion
+## Model diagnostics / assumptions
+## MCMC diagnostics
+## Conclusion
+## Extentions and next steps
+### Particle filtering / between frames
+
+TODO:
+- Random frames, så man kan göra bakgrund, priors på position och size och folk
+- Hoppa mellan k
+- Ellipser
+- Bättre priors på pos, size conditional på xy
+- Optimera likelihood
+
+
 Idé: eigen value compression för att få fram bakgrund 
 
 MVP:
@@ -413,8 +444,9 @@ h <- 288
 # f <- 750 #bra frame med en gubbe
 # f <- 1200 #bra frame med två gubbar, i varandra
 # f <- 1062 # bra för två gubbar, bra perf på den
-# f <- 1082
-f <- 984
+# f <- 1082 # svår frame, en kille i dörren
+# f <- 984
+f <- 100 # svår frame, 10 pers
 jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
 background <- readJPEG("./bg.jpg", native=FALSE)
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
@@ -757,13 +789,14 @@ norm_points <- rmvnorm(100, mean, sigma)
 
 points(norm_points[,1], h-norm_points[,2], col="red")
 
-clusters <- kmeans(points, 2)
+k<-8
+clusters <- kmeans(points, k)
 
 points(clusters$centers[,1], h-clusters$centers[,2], col="green")
 
 
 mean_size <- c(sqrt(mean(clusters$size)), sqrt(mean(clusters$size))*2)
-sigma_size <- diag(c(6^2, 12^2))
+sigma_size <- diag(c(15^2, 30^2))
 # sigma_size <- matrix(c(3^2, (3*5)^2,(3*5)^2,5^2), nrow=2,ncol=2)
 
 
@@ -791,15 +824,30 @@ clamp <- function(x, minv, maxv) {
   return (min(max(x, minv), maxv))
 }
 
+# state = list(
+#   k = 2,
+#   # points = list(
+#   #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#   #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh)
+#   # )
+#   points = list(
+#     list(x = clusters$centers[1,1], y = clusters$centers[1,2], w = mean_size[1], h = mean_size[2]),
+#     list(x = clusters$centers[2,1], y = clusters$centers[2,2], w = mean_size[1], h = mean_size[2])
+#   )
+# )
 state = list(
-  k = 2,
-  # points = list(
-  #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
-  #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh)
-  # )
+  k = 8,
   points = list(
     list(x = clusters$centers[1,1], y = clusters$centers[1,2], w = mean_size[1], h = mean_size[2]),
-    list(x = clusters$centers[2,1], y = clusters$centers[2,2], w = mean_size[1], h = mean_size[2])
+    list(x = clusters$centers[2,1], y = clusters$centers[2,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[3,1], y = clusters$centers[3,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[4,1], y = clusters$centers[4,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[5,1], y = clusters$centers[5,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[6,1], y = clusters$centers[6,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[7,1], y = clusters$centers[7,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[8,1], y = clusters$centers[8,2], w = mean_size[1], h = mean_size[2])#,
+    # list(x = clusters$centers[9,1], y = clusters$centers[9,2], w = mean_size[1], h = mean_size[2]),
+    # list(x = clusters$centers[10,1], y = clusters$centers[10,2], w = mean_size[1], h = mean_size[2])
   )
 )
 
@@ -807,22 +855,30 @@ likelihood <- function(state) {
   state_mask <- array(0, dim=c(h, w, 3))
 
   outside <- 0
+  overlap <- 0
   for (i in 1:state$k) {
     point <- state$points[[i]]
     # outside <- 0
     for (x in round(point$x - point$w/2):round(point$x + point$w/2)) {
       for (y in round(point$y - point$h/2):round(point$y + point$h/2)) {
-        if (y >= 1 && y <= h && x >= 0 && x <= w) {
-          state_mask[y, x, c(1,2,3)] = 1
+        if (y >= 1 && y <= h && x >= 1 && x <= w) {
+          if (state_mask[y, x, 1] == 1) {
+            state_mask[y, x, c(1,2,3)] = 1
+          } else {
+            overlap <- overlap + 1
+          }
         } else {
           outside <- outside + 1
         }
       }
     }
   }
-  
-  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
-  # print(c(exp(-cover), prior(state)))
+
+  # cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
+  # 
+  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside+0.0001*overlap
+  # # print(c(exp(-cover), prior(state)))
+  # # print(data.frame(p10=sum(state_mask == 1 & foreground == 0), p01=sum(state_mask == 0 & foreground == 1), outside=outside, eZ=exp(-cover), prior=prior(state)))
   return (exp(-cover) * prior(state))
 }
 
@@ -838,7 +894,7 @@ propose <- function(state) {
     # 
     # state$points[[i]]$x <- norm[1]
     # state$points[[i]]$y <- norm[2]
-    norm <- rmvnorm(1, c(state$points[[i]]$x, state$points[[i]]$y), diag(c((w*.005)^2, (h*.005)^2)))
+    norm <- rmvnorm(1, c(state$points[[i]]$x, state$points[[i]]$y), diag(c((w*.01)^2, (h*.01)^2)))
     
     state$points[[i]]$x <- clamp(norm[1], 0, w)
     state$points[[i]]$y <- clamp(norm[2], 0, h)
@@ -856,7 +912,8 @@ propose <- function(state) {
 prior <- function(x) {
   prob <- 1
   for (p in x$points) {
-    prob <- prob * dmvnorm(c(p$x, p$y), mean, sigma) * dmvnorm(c(p$w, p$h), mean_size, sigma_size)
+    # prob <- prob * dmvnorm(c(p$x, p$y), mean, sigma) * dmvnorm(c(p$w, p$h), mean_size, sigma_size)
+    prob <- prob * dmvnorm(c(p$w, p$h), mean_size, sigma_size)
     # print(dmvnorm(c(p$x, p$y), mean, sigma) * dmvnorm(c(p$w, p$h), mean_size, sigma_size))
   }
   prob
@@ -881,7 +938,7 @@ states <- metropolis_hastings(
   propose,
   proposal_prob_ratio,
   pi_ratio,
-  5000,
+  20000,
   state
 )
 
@@ -892,7 +949,7 @@ for (s in states) {
   ls <- c(ls, likelihood(s))
   ps <- c(ps, prior(s))
 }
-plot(ls, col="black", type="l", ylim=c(0,max(c(ls, ps))))
+plot(ls, col="black", type="l", ylim=c(0,quantile(c(ls, ps), 0.8)),)
 lines(ps, col="red")
 # lines(ls / ps, col="gray")
 
@@ -903,7 +960,7 @@ render_states <- function(states, indices, title) {
   
     for (i in 1:s$k) {
       point <- s$points[[i]]
-      rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+      rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = rgb(1,0,0,0.5))
     }
   }
 }
@@ -915,6 +972,7 @@ render_states(states, order(ls, decreasing = 1)[c(length(states)-seq(1,15)-1)], 
 render_states(states, sample(1:length(states), 15), "random")
 
 ```
+
 
 
 
