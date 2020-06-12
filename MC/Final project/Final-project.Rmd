@@ -412,9 +412,9 @@ h <- 288
 
 # f <- 750 #bra frame med en gubbe
 # f <- 1200 #bra frame med två gubbar, i varandra
-f <- 1062
+# f <- 1062 # bra för två gubbar, bra perf på den
 # f <- 1082
-# f <- 984
+f <- 984
 jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
 background <- readJPEG("./bg.jpg", native=FALSE)
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
@@ -762,18 +762,30 @@ clusters <- kmeans(points, 2)
 points(clusters$centers[,1], h-clusters$centers[,2], col="green")
 
 
-mean_size <- c(sqrt(clusters$size[1]), sqrt(clusters$size[1])*1.5)
-sigma_size <- diag(c(3^2, 5^2))
+mean_size <- c(sqrt(mean(clusters$size)), sqrt(mean(clusters$size))*2)
+sigma_size <- diag(c(6^2, 12^2))
+# sigma_size <- matrix(c(3^2, (3*5)^2,(3*5)^2,5^2), nrow=2,ncol=2)
 
 
-norm_points <- rmvnorm(100, mean_size, sigma_size)
-rect(rep())
+norm_sizes <- rmvnorm(100, mean_size, sigma_size)
+# rect(rep(clusters$centers[1,1], 100), rep(clusters$centers[1,2], 100), norm_sizes[,1], norm_sizes[,1], col = rgb(1,0,0,0.1))
+
+for (i in 1:nrow(norm_sizes)) {
+  rect(
+    clusters$centers[1,1]-norm_sizes[i,1]/2,
+    h-(clusters$centers[1,2]-norm_sizes[i,2]/2),
+    clusters$centers[1,1]+norm_sizes[i,1]/2,
+    h-(clusters$centers[1,2]+norm_sizes[i,2]/2),
+    col = rgb(1,0,1,0.01)
+  )
+}
 ```
 
 ```{r}
+library(mvtnorm)
 # mean_size <- c(20, 50)
-mean_size <- c(sqrt(clusters$size[1]), sqrt(clusters$size[1])*1.5)
-sigma_size <- diag(c(3^2, 5^2))
+# mean_size <- c(sqrt(clusters$size[1]), sqrt(clusters$size[1])*1.5)
+# sigma_size <- diag(c(3^2, 5^2))
 
 clamp <- function(x, minv, maxv) {
   return (min(max(x, minv), maxv))
@@ -786,8 +798,8 @@ state = list(
   #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh)
   # )
   points = list(
-    list(x = clusters$centers[1,1], y = clusters$centers[1,2], w = ww, h = hh),
-    list(x = clusters$centers[2,1], y = clusters$centers[2,2], w = ww, h = hh)
+    list(x = clusters$centers[1,1], y = clusters$centers[1,2], w = mean_size[1], h = mean_size[2]),
+    list(x = clusters$centers[2,1], y = clusters$centers[2,2], w = mean_size[1], h = mean_size[2])
   )
 )
 
@@ -869,7 +881,7 @@ states <- metropolis_hastings(
   propose,
   proposal_prob_ratio,
   pi_ratio,
-  1000,
+  5000,
   state
 )
 
@@ -884,41 +896,24 @@ plot(ls, col="black", type="l", ylim=c(0,max(c(ls, ps))))
 lines(ps, col="red")
 # lines(ls / ps, col="gray")
 
-  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
-  rasterImage(foreground,0,0,1,1)
-
-  for (i in 1:s$k) {
-    point <- s$points[[i]]
-    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "blue")
+render_states <- function(states, indices, title) {
+  for (s in states[indices]) {
+    plot(0:1,0:1,type="n",ann=TRUE,axes=FALSE, main = title)
+    rasterImage(foreground,0,0,1,1)
+  
+    for (i in 1:s$k) {
+      point <- s$points[[i]]
+      rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+    }
   }
 }
-for (s in states[order(ls, decreasing = 1)[c(seq(1,15))]]) {
-  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
-  rasterImage(foreground,0,0,1,1)
 
-  for (i in 1:s$k) {
-    point <- s$points[[i]]
-    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
-  }
-}
-for (s in states[order(ls, decreasing = 1)[c(length(states)-seq(1,15)-1)]]) {
-  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
-  rasterImage(foreground,0,0,1,1)
+render_states(states, c(1,2,3,4,5), "first")
+render_states(states, length(states)-c(1,2,3,4,5), "last")
+render_states(states, order(ls, decreasing = 1)[c(seq(1,15))], "best")
+render_states(states, order(ls, decreasing = 1)[c(length(states)-seq(1,15)-1)], "worst")
+render_states(states, sample(1:length(states), 15), "random")
 
-  for (i in 1:s$k) {
-    point <- s$points[[i]]
-    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "green")
-  }
-}
-for (s in states[sample(1:length(states), 15)]) {
-  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
-  rasterImage(foreground,0,0,1,1)
-
-  for (i in 1:s$k) {
-    point <- s$points[[i]]
-    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "purple")
-  }
-}
 ```
 
 
