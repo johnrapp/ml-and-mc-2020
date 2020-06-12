@@ -327,6 +327,8 @@ for (i in 1:h) {
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
 # rasterImage(background,0,0,1,1)
 rasterImage(background,0,0,1,1)
+
+writeJPEG(background, "bg.jpg")
 ```
 
 ```{r}
@@ -407,8 +409,10 @@ library(jpeg)
 w <- 384
 h <- 288
 
-f <- 100
+# f <- 750 #bra frame med en gubbe
+f <- 1200 #bra frame med två gubbar
 jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
+background <- readJPEG("./bg.jpg", native=FALSE)
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
 rasterImage(jj,0,0,1,1)
 
@@ -436,22 +440,62 @@ rasterImage(background,0,0,1,1)
 ```
 
 ```{r}
-set.seed(2020)
+# set.seed(2020)
+
+# ww <- 70
+# hh <- 130
+ww <- 17
+hh <- 40
+# state = list(
+#   k = 10,
+#   points = list(
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh)
+#   )
+# )
+# xx<-w*.5
+# yy <-h*.8
+xx<-w*.3
+yy <-h*.2
 state = list(
-  k = 10,
+  k = 2,
   points = list(
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100),
-    list(x = runif(1, 0, w), y = runif(1, 0, h), w = 50, h = 100)
+    list(x = xx, y = yy, w = ww, h = hh),
+    list(x = xx, y = yy, w = ww, h = hh)#,
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh),
+    # list(x = xx, y = yy, w = ww, h = hh)
   )
 )
+# 
+# state = list(
+#   k = 10,
+#   points = list(
+#     list(x = w/2, y = h*.8, w = 60, h = 100),
+#     list(x = w*.7, y = h*.8, w = 60, h = 100),
+#     list(x = w*.85, y = h*.8, w = 60, h = 100),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+#     list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh)
+#   )
+# )
 
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
 rasterImage(foreground,0,0,1,1)
@@ -462,7 +506,159 @@ for (i in 1:state$k) {
 }
 
 
+state_mask <- array(0, dim=c(h, w, 3))
 
+for (i in 1:state$k) {
+  point <- state$points[[i]]
+  for (x in round(point$x - point$w/2):round(point$x + point$w/2)) {
+    for (y in round(point$y - point$h/2):round(point$y + point$h/2)) {
+      if (y >= 1 && y <= h && x >= 0 && x <= w) {
+        state_mask[y, x, c(1,2,3)] = 1
+      }
+    }
+  }
+}
+
+
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(state_mask,0,0,1,1)
+
+# cover <- sum(state_mask == 1 & foreground == 1) / sum(foreground)
+# cover <- sum(state_mask == foreground) / prod(dim(foreground))
+cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)
+exp(-cover)
 ```
 
+
+```{r}
+metropolis_hastings <- function(q_sample, q_ratio, pi_ratio, N, initial_state) {
+  state <- initial_state
+  
+  states <- list(state)
+  
+  for (i in 1:N) {
+    proposed <- q_sample(state)
+    
+    alpha <- q_ratio(state, proposed) * pi_ratio(proposed, state)
+    if (alpha >= 1 || runif(1) <= alpha) {
+      state <- proposed
+    }
+      
+    states <- append(states, list(state))
+  }
+  
+  return (states)
+}
+
+propose <- function(state) {
+  i <- sample(1:state$k, 1)
+  
+  # dx <- (runif(1)-.5)*w *.05
+  # dy <- (runif(1)-.5)*h *.05
+  # 
+  # state$points[[i]]$x <- state$points[[i]]$x + dx
+  # state$points[[i]]$y <- state$points[[i]]$y + dy
+  
+  state$points[[i]]$x <- (runif(1))*w
+  state$points[[i]]$y <- (runif(1))*h
+  
+  return (state)
+}
+
+proposal_prob_ratio <- function(x, y) {
+  return (1)
+}
+
+likelihood <- function(state) {
+  state_mask <- array(0, dim=c(h, w, 3))
+
+  outside <- 0
+  for (i in 1:state$k) {
+    point <- state$points[[i]]
+    # outside <- 0
+    for (x in round(point$x - point$w/2):round(point$x + point$w/2)) {
+      for (y in round(point$y - point$h/2):round(point$y + point$h/2)) {
+        if (y >= 1 && y <= h && x >= 0 && x <= w) {
+          state_mask[y, x, c(1,2,3)] = 1
+        } else {
+          outside <- outside + 1
+        }
+      }
+    }
+    # outsides <- outsides + outside
+  }
+  
+  # print(c(sum(state_mask == 1 & foreground == 0), sum(state_mask == 0 & foreground == 1), sum(state_mask == 1), outside))
+  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
+  # cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1) - 0.0001*sum(state_mask == 1)+0.0001*outside
+  return (exp(-cover))
+}
+
+pi_ratio <- function(state_1, state_2) {
+  likelihood(state_1) /  likelihood(state_2)
+}
+
+states <- metropolis_hastings(
+  propose,
+  proposal_prob_ratio,
+  pi_ratio,
+  10000,
+  state
+)
+
+# for (s in states) {
+#   plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+#   rasterImage(foreground,0,0,1,1)
+# 
+#   for (i in 1:s$k) {
+#     point <- s$points[[i]]
+#     rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+#   }
+# }
+
+ls <- c()
+for (s in states) {
+  ls <- c(ls, likelihood(s))
+}
+plot(ls)
+
+# for (s in states[]) {
+for (s in states[order(ls, decreasing = 1)[c(seq(1,6),length(states)-seq(1,6)-1)]]) {
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+  }
+}
+```
+
+```{r}
+ls <- c()
+for (s in states) {
+  ls <- c(ls, likelihood(s))
+}
+plot(ls)
+
+# for (s in states[]) {
+for (s in states[order(ls, decreasing = 1)[c(seq(1,6),length(states)-seq(0,6-1))]]) {
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+  }
+}
+```
+
+
+$$
+x'=x+uniform(0,1)\\
+x' \sim uniform(x,x+1)\\
+x'=x+N(0,1)\\
+x' \sim N(x,1)\\
+P(x')=P(x(x,(x,x)1)
+$$
 
