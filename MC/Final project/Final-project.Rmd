@@ -410,7 +410,10 @@ w <- 384
 h <- 288
 
 # f <- 750 #bra frame med en gubbe
-f <- 1200 #bra frame med två gubbar
+# f <- 1200 #bra frame med två gubbar, i varandra
+# f <- 1062
+# f <- 1082
+f <- 984
 jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
 background <- readJPEG("./bg.jpg", native=FALSE)
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
@@ -444,8 +447,8 @@ rasterImage(background,0,0,1,1)
 
 # ww <- 70
 # hh <- 130
-ww <- 17
-hh <- 40
+# ww <- 17
+# hh <- 40
 # state = list(
 #   k = 10,
 #   points = list(
@@ -463,13 +466,17 @@ hh <- 40
 # )
 # xx<-w*.5
 # yy <-h*.8
+# xx<-w*.3
+# yy <-h*.2
 xx<-w*.3
 yy <-h*.2
+ww <- 17
+hh <- 40
 state = list(
   k = 2,
   points = list(
-    list(x = xx, y = yy, w = ww, h = hh),
-    list(x = xx, y = yy, w = ww, h = hh)#,
+    list(x = w*.3, y = h*.1, w = ww, h = hh),
+    list(x = w*.25, y = h*.05, w = ww, h = hh)#,
     # list(x = xx, y = yy, w = ww, h = hh),
     # list(x = xx, y = yy, w = ww, h = hh),
     # list(x = xx, y = yy, w = ww, h = hh),
@@ -589,8 +596,8 @@ likelihood <- function(state) {
   }
   
   # print(c(sum(state_mask == 1 & foreground == 0), sum(state_mask == 0 & foreground == 1), sum(state_mask == 1), outside))
-  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
-  # cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1) - 0.0001*sum(state_mask == 1)+0.0001*outside
+  # cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
+  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1) - 0.0001*sum(state_mask == 1)+0.0001*outside
   return (exp(-cover))
 }
 
@@ -623,7 +630,7 @@ for (s in states) {
 plot(ls)
 
 # for (s in states[]) {
-for (s in states[order(ls, decreasing = 1)[c(seq(1,6),length(states)-seq(1,6)-1)]]) {
+for (s in states[order(ls, decreasing = 1)[c(seq(1,15),length(states)-seq(1,15)-1)]]) {
   plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
   rasterImage(foreground,0,0,1,1)
 
