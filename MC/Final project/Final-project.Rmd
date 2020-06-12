@@ -14,6 +14,7 @@ MVP:
 - Priors
   1. Uniform
   2. Parametrisk x, y, k, size från heat map
+  2.5 Residual (det som inte täcks av de andra)
   3. Conditional på förra framen
 - Likelihood
   1. Rektangel överlapp
@@ -411,9 +412,9 @@ h <- 288
 
 # f <- 750 #bra frame med en gubbe
 # f <- 1200 #bra frame med två gubbar, i varandra
-# f <- 1062
+f <- 1062
 # f <- 1082
-f <- 984
+# f <- 984
 jj <- readJPEG(paste("./caviar_frames2/TwoEnterShop2cor",strrep("0", 4-log10(f-1 + 1)),f-1,".jpg", sep=""), native=FALSE)
 background <- readJPEG("./bg.jpg", native=FALSE)
 plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
@@ -475,8 +476,8 @@ hh <- 40
 state = list(
   k = 2,
   points = list(
-    list(x = w*.3, y = h*.1, w = ww, h = hh),
-    list(x = w*.25, y = h*.05, w = ww, h = hh)#,
+    list(x = w*.3, y = h*.35, w = 22, h = 60),
+    list(x = w*.25, y = h*.15, w = 15, h = 40)#,
     # list(x = xx, y = yy, w = ww, h = hh),
     # list(x = xx, y = yy, w = ww, h = hh),
     # list(x = xx, y = yy, w = ww, h = hh),
@@ -596,8 +597,9 @@ likelihood <- function(state) {
   }
   
   # print(c(sum(state_mask == 1 & foreground == 0), sum(state_mask == 0 & foreground == 1), sum(state_mask == 1), outside))
-  # cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
-  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1) - 0.0001*sum(state_mask == 1)+0.0001*outside
+  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
+  # cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1) - 0.0001*sum(state_mask == 1)+0.0001*outside
+  # print(cover)
   return (exp(-cover))
 }
 
@@ -609,7 +611,7 @@ states <- metropolis_hastings(
   propose,
   proposal_prob_ratio,
   pi_ratio,
-  10000,
+  1000,
   state
 )
 
@@ -649,7 +651,7 @@ for (s in states) {
 plot(ls)
 
 # for (s in states[]) {
-for (s in states[order(ls, decreasing = 1)[c(seq(1,6),length(states)-seq(0,6-1))]]) {
+for (s in states[order(ls, decreasing = 1)[c(seq(1,15),length(states)-seq(1,15)-1)]]) {
   plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
   rasterImage(foreground,0,0,1,1)
 
@@ -659,6 +661,267 @@ for (s in states[order(ls, decreasing = 1)[c(seq(1,6),length(states)-seq(0,6-1))
   }
 }
 ```
+
+
+```{r}
+library(mvtnorm)
+
+plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+rasterImage(foreground,0,0,1,1)
+
+mean <- c(w*.3, h*.35)
+sigmas <- c(w*2, h*2)
+sigma <- diag(sigmas)
+
+norm_points <- rmvnorm(100, mean, sigma)
+
+points(norm_points[,1]/w, 1-norm_points[,2]/h, col="red")
+
+```
+
+
+```{r}
+propose <- function(state) {
+  i <- sample(1:state$k, 1)
+  
+  # dx <- (runif(1)-.5)*w *.05
+  # dy <- (runif(1)-.5)*h *.05
+  # 
+  # state$points[[i]]$x <- state$points[[i]]$x + dx
+  # state$points[[i]]$y <- state$points[[i]]$y + dy
+  norm <- rmvnorm(1, mean, sigma)
+    
+  state$points[[i]]$x <- norm[1]
+  state$points[[i]]$y <- norm[2]
+  
+  return (state)
+}
+
+proposal_prob <- function(x) {
+  prob <- 1
+  for (p in x$points) {
+    prob <- prob * dmvnorm(c(p$x, p$y), mean, sigma)
+  }
+  prob
+}
+
+proposal_prob_ratio <- function(x, y) {
+  proposal_prob(x)/proposal_prob(y)
+}
+
+states <- metropolis_hastings(
+  propose,
+  proposal_prob_ratio,
+  pi_ratio,
+  1000,
+  state
+)
+
+
+ls <- c()
+for (s in states) {
+  ls <- c(ls, likelihood(s))
+}
+plot(ls)
+
+for (s in states[order(ls, decreasing = 1)[c(seq(1,15),length(states)-seq(1,15)-1)]]) {
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+  }
+}
+```
+```{r}
+points <- data.frame()
+
+for (x in 1:w) {
+  for (y in 1:h) {
+    if (foreground[y, x, 1] == 1) {
+      points <- rbind(points, list(x=x,y=y))
+    }
+  }
+}
+
+plot(points$x, h-points$y)
+
+# mean <- c(w*.3, h*.35)
+# sigmas <- c(w*2, h*2)
+mean <- c(mean(points$x), mean(points$y))
+sigmas <- c(sd(points$x)^2, sd(points$y)^2)
+sigma <- diag(sigmas)
+
+norm_points <- rmvnorm(100, mean, sigma)
+
+points(norm_points[,1], h-norm_points[,2], col="red")
+
+clusters <- kmeans(points, 2)
+
+points(clusters$centers[,1], h-clusters$centers[,2], col="green")
+
+
+mean_size <- c(sqrt(clusters$size[1]), sqrt(clusters$size[1])*1.5)
+sigma_size <- diag(c(3^2, 5^2))
+
+
+norm_points <- rmvnorm(100, mean_size, sigma_size)
+rect(rep())
+```
+
+```{r}
+# mean_size <- c(20, 50)
+mean_size <- c(sqrt(clusters$size[1]), sqrt(clusters$size[1])*1.5)
+sigma_size <- diag(c(3^2, 5^2))
+
+clamp <- function(x, minv, maxv) {
+  return (min(max(x, minv), maxv))
+}
+
+state = list(
+  k = 2,
+  # points = list(
+  #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh),
+  #   list(x = runif(1, 0, w), y = runif(1, 0, h), w = ww, h = hh)
+  # )
+  points = list(
+    list(x = clusters$centers[1,1], y = clusters$centers[1,2], w = ww, h = hh),
+    list(x = clusters$centers[2,1], y = clusters$centers[2,2], w = ww, h = hh)
+  )
+)
+
+likelihood <- function(state) {
+  state_mask <- array(0, dim=c(h, w, 3))
+
+  outside <- 0
+  for (i in 1:state$k) {
+    point <- state$points[[i]]
+    # outside <- 0
+    for (x in round(point$x - point$w/2):round(point$x + point$w/2)) {
+      for (y in round(point$y - point$h/2):round(point$y + point$h/2)) {
+        if (y >= 1 && y <= h && x >= 0 && x <= w) {
+          state_mask[y, x, c(1,2,3)] = 1
+        } else {
+          outside <- outside + 1
+        }
+      }
+    }
+  }
+  
+  cover <- 0.0001*sum(state_mask == 1 & foreground == 0) + 0.0001*sum(state_mask == 0 & foreground == 1)+0.0001*outside
+  # print(c(exp(-cover), prior(state)))
+  return (exp(-cover) * prior(state))
+}
+
+pi_ratio <- function(state_1, state_2) {
+  likelihood(state_1) /  likelihood(state_2)
+}
+
+propose <- function(state) {
+  i <- sample(1:state$k, 1)
+  
+  if (runif(1) < 0.9) {
+    # norm <- rmvnorm(1, mean, sigma)
+    # 
+    # state$points[[i]]$x <- norm[1]
+    # state$points[[i]]$y <- norm[2]
+    norm <- rmvnorm(1, c(state$points[[i]]$x, state$points[[i]]$y), diag(c((w*.005)^2, (h*.005)^2)))
+    
+    state$points[[i]]$x <- clamp(norm[1], 0, w)
+    state$points[[i]]$y <- clamp(norm[2], 0, h)
+  } else {
+    norm <- rmvnorm(1, mean_size, sigma_size)
+    
+    state$points[[i]]$w <- norm[1]
+    state$points[[i]]$h <- norm[2]
+  }
+  
+  
+  return (state)
+}
+
+prior <- function(x) {
+  prob <- 1
+  for (p in x$points) {
+    prob <- prob * dmvnorm(c(p$x, p$y), mean, sigma) * dmvnorm(c(p$w, p$h), mean_size, sigma_size)
+    # print(dmvnorm(c(p$x, p$y), mean, sigma) * dmvnorm(c(p$w, p$h), mean_size, sigma_size))
+  }
+  prob
+}
+
+proposal_prob <- function(x) {
+  prob <- 1
+  # for (p in x$points) {
+  #   prob <- prob * dmvnorm(c(p$x, p$y), mean, sigma) * dmvnorm(c(p$w, p$h), mean_size, sigma_size)
+  # }
+  for (p in x$points) {
+    prob <- prob * dmvnorm(c(p$w, p$h), mean_size, sigma_size)
+  }
+  prob
+}
+
+proposal_prob_ratio <- function(x, y) {
+  proposal_prob(x)/proposal_prob(y)
+}
+
+states <- metropolis_hastings(
+  propose,
+  proposal_prob_ratio,
+  pi_ratio,
+  1000,
+  state
+)
+
+
+ls <- c()
+ps <- c()
+for (s in states) {
+  ls <- c(ls, likelihood(s))
+  ps <- c(ps, prior(s))
+}
+plot(ls, col="black", type="l", ylim=c(0,max(c(ls, ps))))
+lines(ps, col="red")
+# lines(ls / ps, col="gray")
+
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "blue")
+  }
+}
+for (s in states[order(ls, decreasing = 1)[c(seq(1,15))]]) {
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "red")
+  }
+}
+for (s in states[order(ls, decreasing = 1)[c(length(states)-seq(1,15)-1)]]) {
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "green")
+  }
+}
+for (s in states[sample(1:length(states), 15)]) {
+  plot(0:1,0:1,type="n",ann=FALSE,axes=FALSE)
+  rasterImage(foreground,0,0,1,1)
+
+  for (i in 1:s$k) {
+    point <- s$points[[i]]
+    rect((point$x - point$w/2) / w, 1-(point$y - point$h/2) / h, (point$x + point$w/2)/w, 1-(point$y + point$h/2)/h, col = "purple")
+  }
+}
+```
+
+
 
 
 $$
