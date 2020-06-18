@@ -807,14 +807,14 @@ K <- 1000
 
 plot(solutions$frame_k)
 points(solutions$est_k, col="red")
-plot(solutions$frame_k, solutions$est_k)
+plot(solutions$frame_k, solutions$est_k, main = "The estimated k plot against the ground truth value")
 
 summary(lm(frame_k ~ est_k, data = solutions))
 
 sum(solutions$est_k == solutions$frame_k) / nrow(solutions)
 sum(abs(solutions$est_k - solutions$frame_k) <= 1) / nrow(solutions)
 sum(abs(solutions$est_k - round(mean(solutions$est_k))) <= 1) / nrow(solutions)
-hist(solutions$est_k - solutions$frame_k)
+hist(solutions$est_k - solutions$frame_k, main = "Histogram of the difference between the estimated k and the ground truth value")
 
 table(solutions$frame_k, solutions$est_k)
 
@@ -862,9 +862,9 @@ table(solutions$frame_k, solutions$est_k)
 
 ```{r}
 # folder <- sample(1:length(folder_frame_files), 1)
-folder <- 4
+folder <- 5
 # frame_nr <- sample(1:length(folder_frame_files[[folder]]), 1)
-frame_nr <- 1519
+frame_nr <- 2075
 frame_jpeg <- readJPEG(folder_frame_files[[folder]][[frame_nr]], native=FALSE)
 frame_k <- folder_ks[[folder]][[frame_nr]]
 
@@ -877,13 +877,18 @@ plot_image(frame_jpeg)
 states <- run_rjmcmc(foreground, 3000)
 
 ls <- unlist(lapply(states, function(s) { s$posterior }))
-# ks <- unlist(lapply(states, function(s) { s$k }))
+ks <- unlist(lapply(states, function(s) { s$k }))
 map_index <- order(ls, decreasing = 1)[1]
 
 render_state(states[[map_index]], foreground)
+plot(ls, col="black", type="l", main="Posterior along MCMC runs")
+plot(ks, col="black", type="l", main="Value of k along MCMC runs")
  
 
 ```
+
+
+
 
 
 
