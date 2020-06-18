@@ -104,10 +104,10 @@ hs <- rnorm(50, mean = h_model(ys*h), sd = h_sd)/h
 
 rect(xs - ws/2, 1-(ys - hs/2), xs + ws/2, 1-(ys + ys/2), col=rgb(1,0,0,0.1))
 
-plot(obs$y, obs$w)
+plot(obs$y, obs$w, main="Width as a function of y")
 points(ys*h, ws*h, col="red")
 
-plot(obs$y, obs$h)
+plot(obs$y, obs$h, main="Height as a function of y")
 points(ys*h, hs*h, col="red")
 ```
 
@@ -771,7 +771,7 @@ sample_solution <- function() {
   # plot_image(frame_jpeg)
   # plot_image(background)
   
-  states <- run_rjmcmc(foreground, 3000)
+  states <- run_rjmcmc(foreground, 100000)
   
   ls <- unlist(lapply(states, function(s) { s$posterior }))
   ks <- unlist(lapply(states, function(s) { s$k }))
@@ -796,14 +796,14 @@ sample_solution <- function() {
   ))
 }
 
-K <- 500
+K <- 1000
 
 # sample_solution()
 
 # solutions <- data.frame()
-for (i in 1:K) {
-  solutions <- rbind(solutions, sample_solution())
-}
+# for (i in 1:K) {
+#   solutions <- rbind(solutions, sample_solution())
+# }
 
 plot(solutions$frame_k)
 points(solutions$est_k, col="red")
@@ -813,8 +813,10 @@ summary(lm(frame_k ~ est_k, data = solutions))
 
 sum(solutions$est_k == solutions$frame_k) / nrow(solutions)
 sum(abs(solutions$est_k - solutions$frame_k) <= 1) / nrow(solutions)
-sum(abs(solutions$est_k - mean(solutions$est_k)) <= 1) / nrow(solutions)
+sum(abs(solutions$est_k - round(mean(solutions$est_k))) <= 1) / nrow(solutions)
 hist(solutions$est_k - solutions$frame_k)
+
+table(solutions$frame_k, solutions$est_k)
 
 
 # folder <- sample(1:length(folder_frame_files), 1)
@@ -857,6 +859,32 @@ hist(solutions$est_k - solutions$frame_k)
 # render_states(states, order(ls, decreasing = 1)[c(length(states)-seq(1,5)-1)], "worst")
 # render_states(states, sample(1:length(states), 20), "random")
 ```
+
+```{r}
+# folder <- sample(1:length(folder_frame_files), 1)
+folder <- 4
+# frame_nr <- sample(1:length(folder_frame_files[[folder]]), 1)
+frame_nr <- 1519
+frame_jpeg <- readJPEG(folder_frame_files[[folder]][[frame_nr]], native=FALSE)
+frame_k <- folder_ks[[folder]][[frame_nr]]
+
+foreground <- background_subtraction(frame_jpeg, background)
+
+# plot_image(from_grayscale(foreground))
+plot_image(frame_jpeg)
+# plot_image(background)
+
+states <- run_rjmcmc(foreground, 3000)
+
+ls <- unlist(lapply(states, function(s) { s$posterior }))
+# ks <- unlist(lapply(states, function(s) { s$k }))
+map_index <- order(ls, decreasing = 1)[1]
+
+render_state(states[[map_index]], foreground)
+ 
+
+```
+
 
 
 
