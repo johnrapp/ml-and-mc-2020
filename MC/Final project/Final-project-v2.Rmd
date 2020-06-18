@@ -1,303 +1,18 @@
 ---
 title: "Counting and locating people in surveillance footage"
 author: "John Rapp Farnes"
-date: "6/12/2020"
-output: html_document
+date: "6/18/2020"
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-CONVERGENCE
-DOWNSAMPLE
-NEED LONger to converge when k high
-Likelihood increases over time
-# Abstract
 
-# Introduction
-## Background
-Surveillance cameras are used at a multitude of locations and are used for many purposes including security and activity tracking. In certain applications, human viewing of the footage may be feasible for the purpose of the system, e.g. looking back at footage for a suspected thief in a grocery store. For other applications however, human viewing is not feasible at scale, e.g. for tracking the number of people in an area 24/7. For these applications, an automated system that tracks the number of people and their locations in an image is of need.
 
-## Problem description
-In this project, I will attempt to design an algorithm that views the footage of surveillance cameras and determines 1) the number of people in the image 2) where in the view of the camera they are located. I will design this algorithm using probabilistic modeling and Markov Chain Monte Carlo (MCMC).
 
-## Previous work
-This problem is contained within computer vision, which is a broad field of computer science and applied mathematics. Within this field, classification of images are made with a variety of tools including neural networks, image segmentation algorithms, and MCMC. Specific to surveillance camera footage, there has been a breadth project made. Examples include http://wearables.cc.gatech.edu/paper_of_week/RealTimeTracking-Stauffer,Grimson.pdf tracks object modelling pixels as Gaussian mixtures, whereas https://www.cc.gatech.edu/~dellaert/pubs/Khan05pami.pdf uses particle filtering to track movements of objects, whereas http://www.cse.psu.edu/~rtc12/Papers/LiuCollinsLiuBMVC2011.pdf study the auxillary problem of camera auto calibration and http://citeseerx.ist.psu.edu/viewdoc/download;jsessionid=0FDDF7D82220DB0C7966BC8D007AA447?doi=10.1.1.53.3730&rep=rep1&type=pdf background and foreground estimation. The closest work to this project is http://www.cse.psu.edu/~rtc12/CSE586/papers/mcmcCvpr03Zhao.pdf and http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf, both performing the estimation by Reversible Jump Monte Carlo Markov Chains (RJMCMC), with different approaches to modelling.
-
-## Data set
-In order to make the scope of the project feasible, I decided to go with a surveillance footage data set that was relatively easy. Factors that make the problem of couting and locating humans in surveillance footage hard include but are not limited to:
-* Views where the background, lighting and scene changes, such as outside
-* Dense crowds, where people are occluding each other
-* People with different postures and orientations, such as some sitting while others standing
-* Areas in the background that are hard to distinguish from the foreground, e.g. glass or mirrors that reflect people in the scene
-* Obscure camera angels with perspective distortion effects making modelling harder
-
-Following are some examples of data sets of surveillance footage that I reviewed:
-
-![Mall dataset https://personal.ie.cuhk.edu.hk/~ccloy/downloads_mall_dataset.html. This dataset is relatively hard because of 1) the glass on the store windows reflecting people in the scene crowded scene, the palm tree occluding people behind it, people sitting on the bench below the palm tree, people carrying e.g. bags and strollers.](figures/mall_dataset.jpg)
-
-TODO![Outside datasetMall dataset http://visal.cs.cityu.edu.hk/downloads/downloads-by-year/. This dataset is relatively hard since it's outside](figures/mall_dataset.jpg)
-
-TODO![Another dataset from a mall http://groups.inf.ed.ac.uk/vision/CAVIAR/CAVIARDATA1/, however less complex.](figures/caviar_dataset.jpg)
-
-I decided to go with http://groups.inf.ed.ac.uk/vision/CAVIAR/CAVIARDATA1/ as a starting point since it was less complex than other datasets.
-
-The dataset includes video image frames from various sequences with varying amounts of people and activities. I have selected a subset of these sequences that were deemed appropriate for the project. In addition, each frame in the dataset is labelled with human labeled bounding boxes of the people in the scene specifying the amount of people and their position, width and height.
-
-# Modelling
-## Background subtraction
-For my approach, first step in attempting to solve the problem is separating the foreground and background from each other, so that the foreground can be searched for humans. http://citeseerx.ist.psu.edu/viewdoc/download;jsessionid=0FDDF7D82220DB0C7966BC8D007AA447?doi=10.1.1.53.3730&rep=rep1&type=pdf suggests a Kalman filter approach for this leading to good results, while http://www.cse.psu.edu/~rtc12/CSE586/papers/mcmcCvpr03Zhao.pdf and http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf use standard techniques for background subtraction. The closest to my approach is http://wearables.cc.gatech.edu/paper_of_week/RealTimeTracking-Stauffer,Grimson.pdf which models each pixel as a gaussian mixture, and labels a pixel as foreground if it is sufficiently unlikely given this model.
-
-First, I estimated the background image using the mean of the color values in each pixel from a portion of the data set. The intuition behind this approach is that foreground pixels get "smudged out" when averaged, since most frames have most of the background visible and objects are in different positions across frames. The mean image of 3000 randomly sampled images from the data set may be seen in fig X.
-
-[Backgound estimating by computing the mean image](bg.jpg)
-
-In order to classify the foreground of a given frame using this background image, I computed the difference between the mean of the color values in each pixel (effectively converting it to gray scale) of the frame and background image. If this difference was over a certain threshold, it is considered foreground, otherwise background. This leads to a foreground mask as seen in fig X.
-
-[Example frame](bg.jpg)
-[Foreground mask for the example frame, comparing it to the background image with a fixed threshold](bg.jpg)
-
-One issue with this approach is that the variance is different among pixels, as some are more affected e.g. by natural variations such as lighting. A problem with this approach may be seen in figure (above), the floor pixels in top-middle of the image are classified as background since the lighting is different in those pixels from the frame and the mean image. This implies that a per-pixel threshold would increase performance. In order to do this, I calculate the mean square error of a random sample of frames compared to the background, effectively estimating the variance of the pixels. A multiple of the square root of the variance is then used as a threshold. This approach can effectively be viewed as modeling each pixel as a Gaussian with a certain mean and variance for being a background pixel, and classifying pixels as foreground if they are sufficiently unlikely given this description. The result of this method may be seen in fig X. There are still some artifacts from the shop window, and a person "blending" in to the background as their clothing is too similar to the background, but result is considered sufficiently good for the next step. 
-
-[Foreground mask for the example frame, using a per-pixel threshold](bg.jpg)
-[Square root of the variance map produced in order to determine the per-pixel threshold](bg.jpg)
-
-Other approaches would be a smooth segmentation of foreground and background pixels, where e.g. edges of shapes are less defined. For this purpose, http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf models pixels as Bernoulli distributions. One way to reduce the frequency of people blending in to the background is comparing the images in color rather than in gray scale, as this would help classification in cases where the person has clothing that has the same gray scale but not color value as the background, taking advantage of more information in the classifications.
-
-## Model description
-The problem is modeled using Bayesian probabilities:
-
-$$
-P(\theta|I)=\frac{P(I|\theta)P(\theta)}{P(I)}\propto P(I|\theta)P(\theta)
-$$
-
-where $\theta$ are the parameters and $I$ the observed image. As such, $P(\theta|I)$ is the posterior distribution $\pi$, $P(I|\theta)$ the likelihood and $P(\theta)$ the prior. $P(I)$ can be viewed as normalizing constant. This constant being hard to determine motivates the use of MCMC for sampling $\pi$.
-
-The solution to the problem is defined as the maximum a priori (MAP) estimation $\theta^*$ that maximizes $\pi$.
-
-## Solution space
-As the goal of a given frame is to determine the amount of people in the image and their location, the solution space $\Theta$ has different dimensions depending on the amount of people in the frame. The solutions space is of the form $\theta \in \{k,\{M_1,M_2,\dots,M_k\}\}$, where $k$ is the number of objects in the image, and each $M_i$ represent the position, width and height of the object. As such $M_i\in\mathbb{R}^4$.
-
-## Priors
-### k
-For $k$, a Poisson distribution is assumed, which is consitent with http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf which labels the process as a homogenous Poisson point process. To estimate the parameter for the Poisson distribution, the labelled information is used, where the parameter is calculated as the MLE estimate given the data. As this method required labelling of training footage for the system to be used, which may be laborous for a commercial system, in practise other simpler methods could be used such as counting the amount of people in the scene at random intervals. http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf opted for not using a prior on $k$ for robustness.
-
-### Position
-As some parts of the scene are occupied more often than other, the extreme example being the pixels of the walls which are never occupied, a prior on the position could be applied. This could be included in the model either by e.g. using a single or multi-modal Gaussian prior for the position. In this project, I decided on simply using a uniform prior within the image space, in order to simplify the model and sampling. This is a  homogeneous Poisson point process
-
-Below is a heat-map of the positions from the data labels. 
-
-TODO [Foreground mask for the example frame, using a per-pixel threshold](bg.jpg)
-
-
-### Size
-Since the space of the scene is projected on a 2d camera plane, the sizes of people in the scene vary with their position, as object far away generally are smaller than objects close to the camera. This can calibrated and modelled in a multitude of ways. http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf uses a method for getting an estimate of the vertical vanishing point of the image and determines the perspective transform from there, proposed by http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf. http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf opts for a simple model that penalizes big sizes to avoid unnecessary overlapping, as well as small sizes for blobs that are likely due to image noise.
-
-In this project I opted for a different approach, using the labeled data. Because of the perspective of the chosen scene and camera, size mostly varies in the $y$ direction. Below is a plot of the observed width and height as a function of $y$ position in black. It is clear that they both generally decrease linearly with $y$. An interesting thing to note is that the height increases to a certain point as an object comes closer, after which it decreases. This is because a bounding box covering the object but keeping within the bounds of the image gets smaller as the persons nears the edge. EXAMPLE. In addition, not all points fit this pattern, where some outliers exist. In order to model this, both width and height were modelled as Gaussians centered around the observed trend as a function of $y$. Formally:
-
-$$
-w_i\sim N(f_w(y_i),\sigma_w^2)\\
-h_i\sim N(f_h(y_i),\sigma_h^2)\\
-$$
-
-The functions $f_w$ and $f_h$ were estimated using linear regression, where $f_h$ were regressed on the part before and after the turning point. The variances $\sigma_w^2$ and $\sigma_h^2$ were determined manually such that the observed data was reasonably covered within one standard deviation. In the figure, the red dots correspond to the modelled $w$ and $h$. Again, as this approach required labeled data, the http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf is probably better suited for easier setup of camera systems. Overlapping were handled in a different way, see Likelihood section. In additon, the width and height are clamped, in order to prevent e.g. negative values or other extreme cases.
-
-PARAMETER VALUES
-
-### Prior
-
-In this model, I assume the points and $k$ are independent, whereas the width and height are conditionally dependent on the position. The $X_i$ and $Y_i$ are assumed to be independent of each other and $W_i|Y$ and $H_i|Y$ are conditionally independent. This is different from e.g. http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf where all the parameters are are modelled as independent of each other.
-
-
-Putting it all together, we have for a given point $k\sim\theta$:
-
-$$
-\begin{aligned}
-P(\theta)&=P(k, \{X_i=x_i,Y_i=y_i,W_i=w_i,H_i=h_i\forall i\in 1\dots k\})\\
-&=P(K=k)\prod_{i=1}^P(X_i=x_i,Y_i=y_i,W_i=w_i,H_i=h_i)\\ 
-&=P(K=k)\prod_{i=1}^kP(X_i=x_i)P(Y_i=y_i)(W_i=w_i|Y_i=y_i)P(H_i=h_i|Y_i=y_i)\\
-&\propto \frac{\lambda_K^ke^{-\lambda_K}}{k!} \prod_{i=1}^k\varphi(\frac{w_i-f_w(y_i)}{\sigma_w})\varphi(\frac{h_i-f_h(y_i)}{\sigma_h})
-\end{aligned}
-$$
-
-Where $\varphi$ is the standard Gaussian pdf.
-
-## Object shape model
-Given a $k$ and a foreground mask, the problem can be viewed as choosing positions and sizes such that the foreground mask is covered as much as possible, with as little overlap as possible, and as few non foreground pixels covered as possible. The shape of humans can be modelled in a multitude of ways: http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf uses a pre construced 3D model of humans in different orientations consisting of ellipses for the body, head and limbs, while http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf estimated a "smooth" model of human shapes. In this project, in order to limit the scope, I have decided to use rectangles as a shape model.
-
-## Likelihood
-Modelling each pixel as a Bernoulli variable with a probability of being foreground or background given that there is a human there or not, as well as assuming independence between pixels, http://vision.cse.psu.edu/publications/pdfs/2009ge3.pdf comes up with a likelihood of the form:
-
-$$
-P(I|\theta)=\alpha e^{-(\lambda_{10}N_{10}+\lambda_{01}N_{01})}\propto e^{-Z_1}
-$$
-where $N_{10}$ are the number of pixels where the foreground mask is active but the given solution is not, while $N_{01}$ are the number of pixels where the foreground mask is not active but the given solution is, and $\lambda_{10}$ and $\lambda_{01}$ are parameters, that can be interpreted as weights. Extending on this model, this project adds a term $\lambda_2O$ to $Z_1$, where $O$ are the amount of pixels that are overlapped by several rectangles and $\lambda_2$ a weight. As such, we have likelihood function:
-
-$$
-P(I|\theta)\propto e^{-Z}
-$$
-
-where $Z=\lambda_{10}N_{10}+\lambda_{01}N_{01}+\lambda_2O$. The parameters were estimated by testing examples and balancing the terms until good enough performance were achieved.
-
-## Posterior
-Putting it all together, we have the posterior distribution:
-
-$$
-\begin{aligned}
-P(\theta|I)&\propto P(I|\theta)P(\theta)\\
-&\propto e^{-\lambda_{10}N_{10}+\lambda_{01}N_{01}+\lambda_2O}\frac{\lambda_K^ke^{-\lambda_K}}{k!} \prod_{i=1}^k\varphi(\frac{w_i-f_w(y_i)}{\sigma_w})\varphi(\frac{h_i-f_h(y_i)}{\sigma_h})
-\end{aligned}
-$$
-
-As this distribution is complex and does not have a closed form, however it is a mix of known distributions determined up to a constant, we use Monte Carlo methods to sample from it and find its modes and MAP-estimation.
-
-# Simulation
-In order to sample from the distribution an MCMC is constructed. In order for the chain to converge to the posterior distribution $\pi(X)$, the Metropolis-Hasting conditions are implemented, with proposals $q(X,X')$. In addition, as the dimensions of the space change with $k$, Reversible Jump MCMC (RJMCMC) are used.
-
-Formally, the algorithm works from a given state $X$, and proposes a new state $X'$ according to a proposal distribution $q(X,X')$. Since the space expands and contracts with $k$, this is a special case of expansion-contraction, where $k$ increasing by 1 is expansion and decreasing is contraction file:///C:/Users/johnr/Desktop/MC/2020_Book_MonteCarloMethods.pdf. The expansion adds a new point $u$, whereas contraction removes it. We then have accept the proposal with probability $\alpha$, where
-
-
-$$
-\alpha(x\to x') = \min\Big(1, \frac{\pi(X')}{\pi(X)q(U|X)}\Big)
-$$
-for expansion, and for contraction:
-
-$$
-\alpha(x'\to x) = \min\Big(1, \frac{\pi(X)q(U|X)}{\pi(X')}\Big)
-$$
-
-
-## Proposals
-Data driven, k-mean segmentation given k
-Initial from centers, hw from there
-
-X and Y gaussian around (sigma), not independent case worst-case. Data-driven e.g. gaussian around usually but more complex sampling
-
-probability for x,y or w,h
-
-Move according to prior, x,y not in q
-
-Process birth, death, update
-Probabilities of them
-## MCMC setup
-Iterations, all functions and parameter values
-
-# Result
-
-## Accuracy
-Emperical or statistical
-
-Right if 50% covered, or labels
-
-Common errors
-
-Mall dataset (other parameters?)
-# Discussion
-## Model diagnostics / assumptions
-Is poisson, process right etc
-## MCMC diagnostics
-Converges?
-Irriducible etc, determinant of Jacobian
-Trace plots examples
-
-## Conclusion
-Can be used, need tuning and computing power
-## Extentions and next steps
-BETTER BACKGROUND SUBTRACTION
-BETTER DIFFUSION, BROWNING MOTION, Langevin equations
-Find modes with temeprature
-Better optimized likelihood functions, local
-BETTER HUMAN MODEL
-MORE ROBUST CALIBRATION
-### Particle filtering / between frames
-Multiple frames
-Multiple cameras, tracking
-Not squares
-
-SET SEED
-
-```{r}
-library(jpeg)
-image_files <- Sys.glob("./CAVIAR/**/**.jpg")
-sample_length <- 3000
-sample_frames <- sample(1:length(image_files), size = sample_length, replace = F)
-
-w <- 384
-h <- 288
-
-plot_image <- function(image, title = NULL) {
-  plot(0:1,0:1,type="n",ann=!is.null(title),axes=FALSE, main=title)
-  rasterImage(image,0,0,1,1)
-}
-
-to_grayscale <- function(image) {
-  gray <- array(0, dim=c(h,w))
-  for (x in 1:w) {
-    for (y in 1:h) {
-      gray[y, x] = mean(image[y, x, c(1,2,3)])
-    } 
-  }
-  return (gray)
-}
-
-from_grayscale <- function(gray) {
-  image <- array(0, dim=c(h,w,3))
-  for (x in 1:w) {
-    for (y in 1:h) {
-      image[y, x, c(1,2,3)] = gray[y, x]
-    } 
-  }
-  return (image)
-}
-
-background <- array(0, dim=c(h,w,3))
-for (file in image_files[sample_frames]) {
-  frame <- readJPEG(file, native=FALSE)
-  background <- background + frame / sample_length
-}
-
-clamp <- function(x, minv, maxv) {
-  return (min(max(x, minv), maxv))
-}
-
-for (i in 1:h) {
-  for (j in 1:w) {
-    for (c in 1:3) {
-        background[i, j, c] <- clamp(background[i, j, c], 0, 1)
-    }
-  }
-}
-
-background_grayscale <- to_grayscale(background)
-
-plot_image(background)
-plot_image(from_grayscale(background_grayscale))
-
-writeJPEG(background, "bg.jpg")
-writeJPEG(from_grayscale(background_grayscale), "bg_gray.jpg")
-```
-
-```{r}
-sample_length <- 100
-sample_frames <- sample(1:length(image_files), size = sample_length, replace = F)
-
-background_var <- array(0, dim=c(h,w))
-for (file in image_files[sample_frames]) {
-  frame <- readJPEG(file, native=FALSE)
-  for (i in 1:h) {
-    for (j in 1:w) {
-      background_var[i, j] <- background_var[i, j] + (mean(frame[i, j, c(1,2,3)]) - background_grayscale[i, j])^2 / sample_length^2
-    }
-  }
-}
-
-background_sd <- sqrt(background_var)
-
-hist(2 * background_sd)
-
-plot_image(background)
-plot_image(from_grayscale(background_sd * 10))
-```
 
 ```{r}
 library(xml2)
@@ -362,7 +77,7 @@ library(jpeg)
 # current_frame_nr <- 3000; current_k <- 8 # många personer klumpade
 # current_frame_nr <- 5000 # 4 personer spridda
 # current_frame_nr <- 4000 # många personer långt borta klumpade
-current_frame_nr <- 200 # många personer spridda
+# current_frame_nr <- 200 # många personer spridda
 # current_frame_nr <- 2500 # en nära, nåra borta
 # current_frame_nr <- 800 # en nära, nåra borta
 # current_frame_nr <- 4500 # tre personer, två ihop, en ensam nära
@@ -371,7 +86,7 @@ current_frame_nr <- 200 # många personer spridda
 # current_frame_nr <- 5600 # tre nära
 # current_frame_nr <- 5950 # två nära en vid väggen
 # current_frame_nr <- 5750; current_k <- 4#; current_k <- 5 # fem utspridda
-# current_frame_nr <- 5964-47+2; current_k <- 3 # två spridda, en vid väggen
+current_frame_nr <- 5964-47+2; current_k <- 3 # två spridda, en vid väggen
 current_frame <- readJPEG(image_files[current_frame_nr], native=FALSE)
 
 
@@ -398,12 +113,11 @@ points(ys*h, hs*h, col="red")
 
 ```{r}
 threshold <- 0.2
-# sd_multiplier <- 10
-
-# sd_multiplier <- 20
 sd_multiplier <- 800
+# sd_multiplier <- 0
 
 background <- readJPEG("./bg.jpg", native=FALSE)
+# background_var <- readJPEG("./bg_var.jpg", native=FALSE)
 
 background_subtraction <- function(img, background) {
   mask <- array(dim=c(h,w))
@@ -478,7 +192,7 @@ for (k in 1:current_k) {
 #   points = points
 # )
 # 
-render_state <- function(state, title=NULL) {
+render_state <- function(state, foreground, title=NULL) {
   plot_image(from_grayscale(foreground), title)
 
   cols <- c(
@@ -735,7 +449,7 @@ proposal_prob_ratio <- function(x, y) {
     prior(x$points[y$removed]) / 1
   } else {
     # Updated
-    proposal_prob(x) / proposal_prob(y)
+    proposal_update_prob(x) / proposal_update_prob(y)
   }
 }
 
@@ -836,10 +550,35 @@ folder_ks <- lapply(folder_xmls, function(f) {
 ```{r}
 library(rlist)
 
+sample_state <- function() {
+  # TODO sample poisson
+  k_gen <- sample(1:10, 1)
+  points_gen <- list()
+  
+  for (k in 1:k_gen) {
+    xc <- runif(1, 0, w)
+    yc <- runif(1, 0, h)
+  
+    ww <- clamp(rnorm(1, mean = w_model(yc), sd = w_sd), min_w, w)
+    hh <- clamp(rnorm(1, mean = h_model(yc), sd = h_sd), min_h, h)
+    
+    points_gen[[k]] <- list(x=xc,y=yc,w=ww,h=hh)
+    
+    points_gen[[k]]$x <- clamp(xc, ww/2+1+min_w/2, w-ww/2-min_w/2)
+    points_gen[[k]]$y <- clamp(yc, hh/2+1+min_h/2, h-hh/2-min_h/2)
+  }
+  
+  return (list(
+    k = k_gen,
+    points = points_gen
+  ))
+}
+
 x_sd <- w*.2
 y_sd <- h*.2
+
 run_rjmcmc <- function(foreground, N=3000) {
-  likelihood <- function (state) {
+  posterior <- function (state) {
     state_mask <- array(0, dim=c(h, w))
   
     overlap <- 0
@@ -847,6 +586,12 @@ run_rjmcmc <- function(foreground, N=3000) {
       point <- state$points[[i]]
       for (x in round(point$x - point$w/2):round(point$x + point$w/2)) {
         for (y in round(point$y - point$h/2):round(point$y + point$h/2)) {
+          # if (x < 1 || x > w || y < 1 || y > h) {
+          #   print(c(x, y, point$w, point$h))
+          #   print(point)
+          #   print(state)
+          #   next;
+          # }
           if (state_mask[y, x] == 0) {
             state_mask[y, x] = 1
           } else {
@@ -868,197 +613,249 @@ run_rjmcmc <- function(foreground, N=3000) {
   }
   
   pi_ratio <- function(state_1, state_2) {
-    state_1$likelihood /  state_2$likelihood
+    state_1$posterior /  state_2$posterior
   }
-}
-
-
-
-
-
-
-
-propose_update <- function(state) {
-  i <- sample(1:state$k, 1)
-  p <- state$points[[i]]
-
-  p$x <- rnorm(1, mean = p$x, sd=x_sd)
-  p$y <- rnorm(1, mean = p$y, sd=y_sd)
   
-  p$w <- clamp(rnorm(1, mean = w_model(p$y), sd = w_sd), min_w, w)
-  p$h <- clamp(rnorm(1, mean = h_model(p$y), sd = h_sd), min_h, h)
+  propose_update <- function(state) {
+    i <- sample(1:state$k, 1)
+    p <- state$points[[i]]
   
-  p$x <- clamp(p$x, p$w/2+1, w-p$w/2)
-  p$y <- clamp(p$y, p$h/2+1, h-p$h/2)
-  
-  state$points[[i]] <- p
+    p$x <- rnorm(1, mean = p$x, sd=x_sd)
+    p$y <- rnorm(1, mean = p$y, sd=y_sd)
     
-  return (state)
-}
-
-propose_birth <- function(state) {
-  state$k <- state$k + 1
+    p$w <- clamp(rnorm(1, mean = w_model(p$y), sd = w_sd), min_w, w)
+    p$h <- clamp(rnorm(1, mean = h_model(p$y), sd = h_sd), min_h, h)
+    
+    p$x <- clamp(p$x, p$w/2+min_w/2, w-p$w/2-min_w/2)
+    p$y <- clamp(p$y, p$h/2+1+min_h/2, h-p$h/2-min_h/2)
+    
+    state$points[[i]] <- p
+      
+    return (state)
+  }
   
-  p <- list(
-    x = runif(1, 0, w),
-    y = runif(1, 0, h)
-  )
+  propose_birth <- function(state) {
+    state$k <- state$k + 1
+    
+    p <- list(
+      x = runif(1, 0, w),
+      y = runif(1, 0, h)
+    )
+    
+    p$w <- clamp(rnorm(1, mean = w_model(p$y), sd = w_sd), min_w, w)
+    p$h <- clamp(rnorm(1, mean = h_model(p$y), sd = h_sd), min_h, h)
+    
+    p$x <- clamp(p$x, p$w/2+min_w/2, w-p$w/2-min_w/2)
+    p$y <- clamp(p$y, p$h/2+1+min_h/2, h-p$h/2-min_h/2)
+    
+    state$points[[state$k]] <- p
   
-  p$w <- clamp(rnorm(1, mean = w_model(p$y), sd = w_sd), min_w, w)
-  p$h <- clamp(rnorm(1, mean = h_model(p$y), sd = h_sd), min_h, h)
+    return (state)
+  }
   
-  p$x <- clamp(p$x, p$w/2+1, w-p$w/2)
-  p$y <- clamp(p$y, p$h/2+1, h-p$h/2)
+  propose_death <- function(state) {
+    i <- sample(1:state$k, 1)
+    
+    state$k <- state$k - 1
+    
+    state$points <- list.remove(state$points, i)
+    
+    state$removed <- i
   
-  state$points[[state$k]] <- p
-
-  return (state)
-}
-
-propose_death <- function(state) {
-  i <- sample(1:state$k, 1)
+    return (state)
+  }
   
-  state$k <- state$k - 1
+  points_dist <- function(a, b) {
+    (a$x-b$x)^2 + (a$y-b$y)^2
+  }
   
-  state$points <- list.remove(state$points, i)
+  propose_merge <- function(state) {
+    dists <- array(Inf, dim=c(state$k, state$k))
+    
+    for (i in 1:(state$k - 1)) {
+      for (j in (i + 1):state$k) {
+        pi <- state$points[[i]]
+        pj <- state$points[[j]]
+        dists[i, j] <- points_dist(pi, pj)
+      }
+    }
+    
+    remove_i <- floor(which(dists == min(dists)) / state$k)
+    
+    state$k <- state$k - 1
+    
+    state$points <- list.remove(state$points, remove_i)
+    
+    state$removed <- remove_i
   
-  state$removed <- i
-
-  return (state)
-}
-
-points_dist <- function(a, b) {
-  (a$x-b$x)^2 + (a$y-b$y)^2
-}
-
-propose_merge <- function(state) {
-  dists <- array(Inf, dim=c(state$k, state$k))
+    return (state)
+  }
   
-  for (i in 1:(state$k - 1)) {
-    for (j in (i + 1):state$k) {
-      pi <- state$points[[i]]
-      pj <- state$points[[j]]
-      dists[i, j] <- points_dist(pi, pj)
+  # TODO birth and death proposal probabilities according to poisson
+  
+  propose <- function(state) {
+    
+    process <- runif(1)
+    
+    new_state <- NULL
+    
+    if (process < 0.1) {
+      new_state <- propose_birth(state)
+    } else if (process < 0.175 && state$k > 1) {
+      new_state <- propose_death(state)
+    } else if (process < 0.20 && state$k > 1) {
+      new_state <- propose_merge(state)
+    } else {
+      new_state <- propose_update(state)
+    }
+    
+    new_state$posterior <- posterior(new_state)
+    
+    return (new_state)
+  }
+  
+  prior <- function(x) {
+    prob <- 1
+    for (p in x$points) {
+      prob <- prob * dnorm(p$w, mean = w_model(p$y), sd = w_sd) * dnorm(p$h, mean = h_model(p$y), sd = h_sd)
+    }
+    prob
+  }
+  
+  proposal_update_prob <- function(x) {
+    prior(x)
+  }
+  
+  proposal_prob_ratio <- function(x, y) {
+    k_diff <- y$k - x$k
+    
+    if (k_diff > 1) {
+      # Expanded
+      1 / prior(y$points[y$k])
+    } else if (k_diff < 1) {
+      # Contracted
+      prior(x$points[y$removed]) / 1
+    } else {
+      # Updated
+      proposal_update_prob(x) / proposal_update_prob(y)
     }
   }
   
-  remove_i <- floor(which(dists == min(dists)) / state$k)
+  initial_state <- sample_state()
   
-  state$k <- state$k - 1
+  initial_state$posterior <- posterior(initial_state)
   
-  state$points <- list.remove(state$points, remove_i)
-  
-  state$removed <- remove_i
-
-  return (state)
+  states <- metropolis_hastings(
+    propose,
+    proposal_prob_ratio,
+    pi_ratio,
+    N,
+    initial_state
+  )
 }
 
-# TODO birth and death proposal probabilities according to poisson
-
-propose <- function(state) {
-  
-  process <- runif(1)
-  
-  new_state <- NULL
-  
-  if (process < 0.1) {
-    new_state <- propose_birth(state)
-  } else if (process < 0.2 && state$k > 1) {
-    new_state <- propose_death(state)
-  } else if (process < 0.25 && state$k > 1) {
-    new_state <- propose_merge(state)
-  } else {
-    new_state <- propose_update(state)
-  }
-  
-  new_state$likelihood <- likelihood(new_state)
-  
-  return (new_state)
-}
-
-prior <- function(x) {
-  prob <- 1
-  for (p in x$points) {
-    prob <- prob * dnorm(p$w, mean = w_model(p$y), sd = w_sd) * dnorm(p$h, mean = h_model(p$y), sd = h_sd)
-  }
-  prob
-}
-
-proposal_update_prob <- function(x) {
-  prior(x)
-}
-
-proposal_prob_ratio <- function(x, y) {
-  k_diff <- y$k - x$k
-  
-  if (k_diff > 1) {
-    # Expanded
-    1 / prior(y$points[y$k])
-  } else if (k_diff < 1) {
-    # Contracted
-    prior(x$points[y$removed]) / 1
-  } else {
-    # Updated
-    proposal_prob(x) / proposal_prob(y)
-  }
-}
 ```
 
 
 
 ```{r}
-folder <- sample(1:length(folder_frame_files), 1)
-frame_nr <- sample(1:length(folder_frame_files[[folder]]), 1)
-frame_jpeg <- readJPEG(folder_frame_files[[folder]][[frame_nr]], native=FALSE)
-# frame_xml <- folder_xmls[[folder]][[frame_nr]]
-frame_k <- folder_ks[[folder]][[frame_nr]]
-
-foreground <- background_subtraction(current_frame, background)
-
-plot_image(from_grayscale(foreground))
-plot_image(current_frame)
-plot_image(background)
-
-
-
-states <- metropolis_hastings(
-  propose,
-  proposal_prob_ratio,
-  pi_ratio,
-  3000,
-  # initial_state
-  initial_state_unif
-)
-
-
-ls <- c()
-ps <- c()
-ks <- c()
-for (s in states) {
-  # ls <- c(ls, likelihood(s))
-  ls <- c(ls, s$likelihood)
-  ps <- c(ps, prior(s))
-  ks <- c(ks, s$k)
-}
-# plot(ls, col="black", type="l", ylim=c(0,quantile(c(ls, ps), 0.8)))
-plot(ls, col="black", type="l", main="Posterior along MCMC runs")
-# lines(ps, col="red")
-plot(ks, type="l", main="Number of people along MCMC runs")
-hist(ks)
-
-render_states <- function(states, indices, title) {
-  for (s in states[indices]) {
-    render_state(s, title)
+sample_solution <- function() {
+  folder <- sample(1:length(folder_frame_files), 1)
+  frame_nr <- sample(1:length(folder_frame_files[[folder]]), 1)
+  frame_jpeg <- readJPEG(folder_frame_files[[folder]][[frame_nr]], native=FALSE)
+  frame_k <- folder_ks[[folder]][[frame_nr]]
+  
+  foreground <- background_subtraction(frame_jpeg, background)
+  
+  # plot_image(from_grayscale(foreground))
+  # plot_image(frame_jpeg)
+  # plot_image(background)
+  
+  states <- run_rjmcmc(foreground, 3000)
+  
+  ls <- unlist(lapply(states, function(s) { s$posterior }))
+  ks <- unlist(lapply(states, function(s) { s$k }))
+  map_index <- order(ls, decreasing = 1)[1]
+  
+  est_k <- ks[map_index]
+  
+  getmode <- function(v) {
+     uniqv <- unique(v)
+     uniqv[which.max(tabulate(match(v, uniqv)))]
   }
+  
+  # render_state(states[[map_index]], foreground)
+  
+  return (list(
+    folder=folder,
+    frame_nr=frame_nr,
+    frame_k=frame_k,
+    est_k=est_k,
+    mode_k=mode(ks)#,
+    # best_state=states[[map_index]]
+  ))
 }
 
-render_states(states, seq(1,4), "first")
-render_states(states, length(states)-seq(1,5)-1, "last")
-render_states(states, order(ls, decreasing = 1)[c(seq(1,20))], "best")
-render_states(states, order(ls, decreasing = 1)[c(length(states)-seq(1,5)-1)], "worst")
-render_states(states, sample(1:length(states), 20), "random")
+K <- 500
+
+# sample_solution()
+
+# solutions <- data.frame()
+for (i in 1:K) {
+  solutions <- rbind(solutions, sample_solution())
+}
+
+plot(solutions$frame_k)
+points(solutions$est_k, col="red")
+plot(solutions$frame_k, solutions$est_k)
+
+summary(lm(frame_k ~ est_k, data = solutions))
+
+sum(solutions$est_k == solutions$frame_k) / nrow(solutions)
+sum(abs(solutions$est_k - solutions$frame_k) <= 1) / nrow(solutions)
+sum(abs(solutions$est_k - mean(solutions$est_k)) <= 1) / nrow(solutions)
+hist(solutions$est_k - solutions$frame_k)
 
 
+# folder <- sample(1:length(folder_frame_files), 1)
+# frame_nr <- sample(1:length(folder_frame_files[[folder]]), 1)
+# frame_jpeg <- readJPEG(folder_frame_files[[folder]][[frame_nr]], native=FALSE)
+# frame_k <- folder_ks[[folder]][[frame_nr]]
+# 
+# foreground <- background_subtraction(current_frame, background)
+# 
+# plot_image(from_grayscale(foreground))
+# plot_image(current_frame)
+# plot_image(background)
+# 
+# states <- run_rjmcmc(foreground, 5000)
+
+# ls <- c()
+# ps <- c()
+# ks <- c()
+# for (s in states) {
+#   # ls <- c(ls, likelihood(s))
+#   ls <- c(ls, s$posterior)
+#   ps <- c(ps, prior(s))
+#   ks <- c(ks, s$k)
+# }
+# # plot(ls, col="black", type="l", ylim=c(0,quantile(c(ls, ps), 0.8)))
+# plot(ls, col="black", type="l", main="Posterior along MCMC runs")
+# # lines(ps, col="red")
+# plot(ks, type="l", main="Number of people along MCMC runs")
+# hist(ks)
+# 
+# render_states <- function(states, indices, title) {
+#   for (s in states[indices]) {
+#     render_state(s, title)
+#   }
+# }
+# 
+# render_states(states, seq(1,4), "first")
+# render_states(states, length(states)-seq(1,5)-1, "last")
+# render_states(states, order(ls, decreasing = 1)[c(seq(1,20))], "best")
+# render_states(states, order(ls, decreasing = 1)[c(length(states)-seq(1,5)-1)], "worst")
+# render_states(states, sample(1:length(states), 20), "random")
 ```
 
 
